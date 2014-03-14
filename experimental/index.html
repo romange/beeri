@@ -1,0 +1,156 @@
+﻿<!DOCTYPE html>
+<html>
+  <head>
+    <title>Polygon debugger</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link href="http://netdna.bootstrapcdn.com/twitter-bootstrap/2.3.1/css/bootstrap-combined.min.css" rel="stylesheet" media="screen">
+    <script src="https://maps.googleapis.com/maps/api/js?v=3.exp&sensor=false"></script>
+     <style media="screen" type="text/css">
+      div#map-canvas {
+  		  height: 100%;
+        min-height: 500px;
+  		  margin: 0;
+  		  padding: 0;
+  		}
+
+      #map-canvas img {
+        max-width: none;
+      }
+
+      .sidebar-nav {
+        padding: 9px 0;
+      }
+      .jumbotron {
+        position: relative;
+        padding: 40px 0;
+        color: #fff;
+        text-align: center;
+        text-shadow: 0 1px 3px rgba(0,0,0,.4), 0 0 30px rgba(0,0,0,.075);
+        background: #020031; /* Old browsers */
+        background: -moz-linear-gradient(45deg,  #020031 0%, #6d3353 100%); /* FF3.6+ */
+        background: -webkit-gradient(linear, left bottom, right top, color-stop(0%,#020031), color-stop(100%,#6d3353)); /* Chrome,Safari4+ */
+        background: -webkit-linear-gradient(45deg,  #020031 0%,#6d3353 100%); /* Chrome10+,Safari5.1+ */
+        background: -o-linear-gradient(45deg,  #020031 0%,#6d3353 100%); /* Opera 11.10+ */
+        background: -ms-linear-gradient(45deg,  #020031 0%,#6d3353 100%); /* IE10+ */
+        background: linear-gradient(45deg,  #020031 0%,#6d3353 100%); /* W3C */
+        filter: progid:DXImageTransform.Microsoft.gradient( startColorstr='#020031', endColorstr='#6d3353',GradientType=1 ); /* IE6-9 fallback on horizontal gradient */
+        -webkit-box-shadow: inset 0 3px 7px rgba(0,0,0,.2), inset 0 -3px 7px rgba(0,0,0,.2);
+           -moz-box-shadow: inset 0 3px 7px rgba(0,0,0,.2), inset 0 -3px 7px rgba(0,0,0,.2);
+                box-shadow: inset 0 3px 7px rgba(0,0,0,.2), inset 0 -3px 7px rgba(0,0,0,.2);
+      }
+		</style>
+
+    <script>
+  var map;
+  var polygonArray = [];
+
+  function initialize() {
+    var myLatLng = new google.maps.LatLng(51.505323, -0.12085);
+    var mapOptions = {
+      zoom: 12,
+      center: myLatLng,
+      streetViewControl: false,
+      overviewMapControl: true,
+      mapTypeControl: false,
+      mapTypeId: google.maps.MapTypeId.ROADMAP
+    };
+
+    var mapElement = document.getElementById('map-canvas');
+    map = new google.maps.Map(mapElement, mapOptions);
+    var debugTxt = document.createTextNode("");
+    mapElement.parentElement.appendChild(debugTxt);
+   /* var infowindow = new google.maps.InfoWindow({
+    content: 'Change the zoom level',
+    pixelOffset: new google.maps.Size(13, 12),
+    });
+    infowindow.open(map);*/
+
+    google.maps.event.addListener(map, 'zoom_changed', function() {
+      var zoomLevel = map.getZoom();
+      debugTxt.textContent = ('Zoom: ' + zoomLevel);
+    });
+
+    parseInput();
+  }
+
+  function parseInput() {
+    var allPolygons = relations; // $.parseJSON($("#jsInput").val());
+    var outputContainer = $("#poly_names");
+    // outputContainer.empty();
+    for (var i = 0; i < allPolygons.length; i++) {
+        var polygon = allPolygons[i];
+        outputContainer.append("<li><a href='#' onClick=\"displayPolygon(event, "+i+");\">" +
+                               polygon.name + "</a></li>");
+    }
+    outputContainer.children().eq(0).addClass('active');
+  }
+
+  function displayPolygon(e, index) {
+    $('.nav-list li').removeClass('active');
+    e.toElement.parentElement.setAttribute('class', 'active');
+    for (var i = 0; i < polygonArray.length; i++) {
+      polygonArray[i].setMap(null);
+    }
+    polygonArray = [];
+    var allPolygons = relations; // $.parseJSON($("#jsInput").val());
+    var area = allPolygons[index];
+    for (var i = 0; i < area.loops.length; i++) {
+      var loop = area.loops[i];
+      var mapShape = [];
+      for (var j = 0; j < loop.length; j++) {
+        mapShape.push(new google.maps.LatLng(loop[j][0], loop[j][1]));
+      }
+      var polygon = new google.maps.Polygon({
+             paths: mapShape,
+             strokeColor: '#FF0000',
+             strokeOpacity: 0.8,
+             strokeWeight: 2,
+             fillColor: '#FF0000',
+             fillOpacity: 0.35,
+             zIndex: 1
+           });
+      polygon.setMap(map);
+      polygonArray.push(polygon);
+
+    }
+    var cent = new google.maps.LatLng(area.center[0], area.center[1]);
+    map.setCenter(cent);
+    map.setZoom(area.zoom);
+  }
+
+google.maps.event.addDomListener(window, 'load', initialize);
+    </script>
+  </head>
+  <body>
+      <div class='navbar navbar-inverse navbar-fixed-top'>
+      <div class='navbar-inner'>
+        <ul class="nav">
+          <li class="active"><a href="#">Home</a></li>
+          <li><a href="/page1">Page One</a></li>
+          <li><a href="#">Page Two</a></li>
+        </ul>
+      </div>
+      </div>
+     <header class='jumbotron'>
+      <h1>Polygon debugger</h1>
+     </header>
+     <div class="container-fluid">
+      <div class="row-fluid">
+        <div class="span3">
+          <ul class="nav-list" id="poly_names">
+            <li class="nav-header">Places</li>
+          </ul>
+        </div>
+        <div class="span9">
+          <div style="padding: 10px 10px;">
+            <div id="map-canvas" ></div>
+          </div>
+        </div>
+      </div>
+
+    </div>
+    <script src="http://ajax.googleapis.com/ajax/libs/jquery/1.9.1/jquery.min.js"></script>
+    <script src="http://netdna.bootstrapcdn.com/twitter-bootstrap/2.3.1/js/bootstrap.min.js"></script>
+    <script src="area.js"></script>
+  </body>
+</html>

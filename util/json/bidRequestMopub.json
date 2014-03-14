@@ -1,0 +1,38 @@
+{
+"user": 
+{
+	"keywords": "Sports,TV", 
+	"uid": "32B1C496B84EA549191CDC65d32ADE0C8D74C91B"
+}, 
+	
+"imp": 
+	[
+		{"h": 50, "battr": [], "impid": "5d6dedf3-17bb-11e2-b5c0-1040f38b83e0", "w": 320, "instl": 0}
+	], 
+"pf": 0.0, 
+"at": 2, 
+"restrictions": {
+	"badv": [], 
+	"bcat": []
+}, 
+"device": {
+	"loc": "39.347,-76.673", 
+	"ua": "MOT-XT300/ Mozilla/5.0 (Linux; U; Android 2.1-update1; es-us;", 
+	"carrier": "Wi-Fi", 
+	"country": "USA", 
+	"ip": "204.28.127.10", 
+	"dpid": "32b1c496b84ea549191cdc65d32ade0c8d74c91b",
+	"os": "Android", 
+	"js": 1, 
+	"osv": "2.1-update1"
+}, 
+"tmax": 200, 
+"id": "31c64cf8-17bb-11e2-a4c5-1040f38b83e0", 
+"site": {
+	"cat": ["IAB10-05", "IAB31"], 
+	"pid": "agltb3B1Yi1pbmNyAEsBS0GjZ291bnQY9Iv5FAw", 
+	"name": "Test Site", 
+	"pub": "Test Pub", 
+	"sid": "65749471"
+}
+}

@@ -1,0 +1,136 @@
+#ifndef SUPERSONIC_OPENSOURCE_TIMER_TIMER_H_
+#define SUPERSONIC_OPENSOURCE_TIMER_TIMER_H_
+
+#include <time.h>
+#include <sys/time.h>
+#include "base/integral_types.h"
+#include "base/macros.h"
+
+#if 0
+// Abstract base class for lightweight timers defined below, ensures that
+// the core functionalities maintain the same interface.
+class TimerBase {
+ public:
+  TimerBase() : timer_(), start_fresh_(true) { }
+
+  // Starts the timer.
+  virtual void Start();
+
+  // Stops the timer, but does not reset to zero.
+  virtual void Stop();
+
+  // Sets the elapsed counter to zero and stops if running.
+  virtual void Reset();
+
+  // Restarts the timer counting from zero.
+  virtual void Restart();
+
+  virtual double Get() const ABSTRACT;        // get the value in seconds
+  virtual int64 GetInUsec() const ABSTRACT;   // get the value in microseconds
+
+ protected:
+  // Underlying boost timer.
+  bt::cpu_timer timer_;
+
+  // Switch saying whether the timer should pick up where it left off
+  // or start fresh.
+  bool start_fresh_;
+};
+
+// TODO(tkaftal): Inline virtual functions don't seem like a great idea, but
+// both spy.cc and benchmark.cc use statically defined timers, so the calls may
+// actually get inlined, plus we don't want overhead on timing. Does this
+// make sense?
+inline void TimerBase::Start() {
+  // Do nothing, if timer is running.
+  if (!timer_.is_stopped()) {
+    return;
+  }
+
+  if (start_fresh_) {
+    timer_.start();
+  } else {
+    timer_.resume();
+  }
+}
+
+inline void TimerBase::Stop() {
+  timer_.stop();
+  start_fresh_ = false;
+}
+
+inline void TimerBase::Reset() {
+  timer_.stop();
+  start_fresh_ = true;
+}
+
+inline void TimerBase::Restart() {
+  timer_.start();
+}
+
+// A timer class for measuring wall time.
+// TODO(tkaftal): Add more precise info on accuracy, based on boost doc.
+class WallTimer : public TimerBase {
+ public:
+  virtual double Get() const;
+  virtual int64 GetInUsec() const;
+  virtual int64 GetInNanos() const;
+};
+
+inline double WallTimer::Get() const {
+  return toSeconds(timer_.elapsed().wall);
+}
+
+inline int64 WallTimer::GetInUsec() const {
+  return toUSeconds(timer_.elapsed().wall);
+}
+
+inline int64 WallTimer::GetInNanos() const {
+  return timer_.elapsed().wall;
+}
+
+// Class for user-time measurements.
+// TODO(tkaftal): Add more precise info on accuracy, based on boost doc.
+class UserTimer : public TimerBase {
+ public:
+  virtual double Get() const;
+  virtual int64 GetInUsec() const;
+  virtual int64 GetInNanos() const;
+};
+
+inline double UserTimer::Get() const {
+  return toSeconds(timer_.elapsed().user);
+}
+
+inline int64 UserTimer::GetInUsec() const {
+  return toUSeconds(timer_.elapsed().user);
+}
+
+inline int64 UserTimer::GetInNanos() const {
+  return timer_.elapsed().user;
+}
+
+// Class for measuring time spent in kernel.
+// TODO(tkaftal): Add more precise info on accuracy, based on boost doc.
+class SystemTimer : public TimerBase {
+ public:
+  virtual double Get() const;
+  virtual int64 GetInUsec() const;
+  virtual int64 GetInNanos() const;
+};
+
+inline double SystemTimer::Get() const {
+  return toSeconds(timer_.elapsed().system);
+}
+
+inline int64 SystemTimer::GetInUsec() const {
+  return toUSeconds(timer_.elapsed().system);
+}
+
+inline int64 SystemTimer::GetInNanos() const {
+  return timer_.elapsed().system;
+}
+
+#endif
+
+#endif  // SUPERSONIC_OPENSOURCE_TIMER_TIMER_H_

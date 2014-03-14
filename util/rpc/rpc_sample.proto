@@ -1,0 +1,17 @@
+package rpc.testing;
+
+option cc_generic_services = true;
+
+message Request {
+  optional string name = 1;
+  optional int32 id = 2;
+}
+
+// Our address book file is just one of these.
+message Response {
+  optional string result = 1;
+}
+
+service TestRpcService {
+  rpc func1(Request) returns (Response);
+}

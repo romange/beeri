@@ -1,0 +1,43 @@
+package util.rpc;
+
+message Status {
+  enum Code {
+    OK = 0;
+    INVALID_SERVICE = 2;
+    INVALID_METHOD = 3;
+    DEADLINE_EXCEEDED = 4;
+    CONNECTION_REFUSED = 5;
+    APPLICATION_ERROR = 10;
+    UNKNOWN_ERROR = 11;
+  }
+
+  optional Code code = 1; // if not present that means status ok.
+  optional string details = 2;
+
+  // in case code is APPLICATION_ERROR this field is intended to describe the app level error.
+  optional int32 app_err_code = 3;
+}
+
+message RpcControlRequest {
+  enum Command {
+    REQUEST = 1;
+  }
+  optional Command command = 1 [ default = REQUEST ];
+
+  // unique request id per tcp connection. optional because this field may be unrelevant
+  // for fututure commands. for REQUEST it's required.
+  optional int64 event_id = 2;
+
+  optional string method_full_name = 4;
+  // optional int32 request_blob_size = 5;
+
+  // deadline in msec, not present means infinite.
+  optional uint32 deadline_msec = 6;
+}
+
+message RpcControlResponse {
+  optional Status status = 1;
+
+  // event_id equal to Request.event_id
+  optional int64 event_id = 2;
+}

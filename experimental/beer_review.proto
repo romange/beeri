@@ -1,0 +1,19 @@
+message BeerReview {
+    required string name = 1;
+    required int32 beer_id = 2;
+    required int32 brewer_id = 3;
+
+    message Review {
+        required float overall = 1;
+        required int64 time = 2;
+        required string profile_name = 3;
+        optional float abv = 4;
+        required string style = 5;
+        required float appearance = 6;
+        required float aroma = 7;
+        required float palate = 8;
+        required float taste = 9;
+        required string text = 10;
+    }
+    repeated Review review = 4;
+}
