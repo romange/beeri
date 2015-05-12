@@ -18,3 +18,6 @@ cxx_link(read_sstable base sstable)
 
 add_executable(interview interview.cc)
 cxx_link(interview base json mysqlcppconn)
+
+add_executable(ex1 ex1.cc)
+cxx_link(ex1 base)
