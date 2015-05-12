@@ -14,3 +14,6 @@ sudo apt-get -y install libbz2-dev libcurl4-gnutls-dev
 ```
 
 To build run `./blaze.sh`
+
+
+ex: https://goo.gl/IulwNm
