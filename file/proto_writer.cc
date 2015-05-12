@@ -1,4 +1,4 @@
-// Copyright 2014, Beeri 15.  All rights reserved.
+// Copyright 2013, Beeri 15.  All rights reserved.
 // Author: Roman Gershman (romange@gmail.com)
 //
 #include <unordered_set>
@@ -14,6 +14,8 @@
 
 using base::Status;
 using strings::Slice;
+using std::string;
+
 namespace file {
 
 const char kProtoSetKey[] = "__proto_set__";
@@ -50,20 +52,7 @@ ProtoWriter::ProtoWriter(StringPiece filename, const gpb::Descriptor* dscr, Opti
     table_builder_.reset(new sstable::TableBuilder(sstable::Options(), sink_.get()));
     table_builder_->AddMeta(kProtoSetKey, fd_set_str);
     table_builder_->AddMeta(kProtoTypeKey, dscr->full_name());
-  }
-#if 0
-  else if (opts.format == KEY_TABLE) {
-    table_.reset(new util::DiskTable(opts.max_size_mb));
-    Status status = table_->Open(filename);
-    CHECK(status.ok()) << status;
-    status = table_->BeginTransaction();
-    status.AddError(table_->Put(strings::Slice(kProtoSetKey), strings::Slice(fd_set_str)));
-    status.AddError(table_->Put(strings::Slice(kProtoTypeKey), strings::Slice(dscr->full_name())));
-    status.AddError(table_->CommitTransaction());
-    CHECK(status.ok()) << status;
-  }
-#endif
-  else {
+  } else {
     LOG(FATAL) << "Invalid format " << opts.format;
   }
 }
@@ -75,11 +64,8 @@ ProtoWriter::~ProtoWriter() {
 util::Status ProtoWriter::Add(const ::google::protobuf::MessageLite& msg) {
   CHECK(writer_);
   CHECK_EQ(dscr_->full_name(), msg.GetTypeName());
-  util::Status status;
   if (!was_init_) {
-    status =  writer_->Init();
-    if (!status.ok())
-       return status;
+    RETURN_IF_ERROR(writer_->Init());
     was_init_ = true;
   }
 
@@ -88,25 +74,6 @@ util::Status ProtoWriter::Add(const ::google::protobuf::MessageLite& msg) {
 
 util::Status ProtoWriter::Add(strings::Slice key, const ::google::protobuf::MessageLite& msg) {
   CHECK_EQ(dscr_->full_name(), msg.GetTypeName());
-#if 0
-  if (options_.format == KEY_TABLE) {
-    CHECK(table_);
-    if (write_count_in_transaction_ == 0) {
-      RETURN_IF_ERROR(table_->BeginTransaction());
-    }
-    util::Status status = table_->Put(key, msg.SerializeAsString());
-    if (status.ok()) {
-      if (++write_count_in_transaction_ >= options_.transaction_size) {
-        write_count_in_transaction_ = 0;
-        return table_->CommitTransaction();
-      }
-      return Status::OK;
-    }
-    table_->AbortTransaction();
-    write_count_in_transaction_ = 0;
-    return status;
-  } else
-#endif
    if (options_.format == SSTABLE) {
     if (!key.empty()) {
       char* ptr = arena_.Allocate(key.size());
@@ -116,8 +83,8 @@ util::Status ProtoWriter::Add(strings::Slice key, const ::google::protobuf::Mess
     int msg_size = msg.ByteSize();
     strings::Slice value;
     if (msg_size > 0) {
-      uint8* ptr = reinterpret_cast<uint8*>(arena_.Allocate(msg_size));
-      msg.SerializeWithCachedSizesToArray(ptr);
+      char* ptr = arena_.Allocate(msg_size);
+      msg.SerializeWithCachedSizesToArray(reinterpret_cast<uint8*>(ptr));
       value.set(ptr, msg_size);
     }
     k_v_vec_.emplace_back(key, value);
@@ -129,6 +96,10 @@ util::Status ProtoWriter::Add(strings::Slice key, const ::google::protobuf::Mess
 
 util::Status ProtoWriter::Flush() {
   if (writer_) {
+    if (!was_init_) {
+      RETURN_IF_ERROR(writer_->Init());
+      was_init_ = true;
+    }
     return writer_->Flush();
   }
   if (options_.format == SSTABLE) {
@@ -140,13 +111,6 @@ util::Status ProtoWriter::Flush() {
     RETURN_IF_ERROR(table_builder_->Finish());
     return sink_->Flush();
   }
-#if 0
-  if (write_count_in_transaction_ > 0) {
-    RETURN_IF_ERROR(table_->CommitTransaction());
-    write_count_in_transaction_ = 0;
-  }
-  return table_->Flush(true);
-#endif
   return Status::OK;
 }
 

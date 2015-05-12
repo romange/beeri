@@ -33,7 +33,7 @@ inline uint32 Block::NumRestarts() const {
 }
 
 Block::Block(const BlockContents& contents)
-    : data_(contents.data.data()),
+    : data_(contents.data.ubuf()),
       size_(contents.data.size()),
       owned_(contents.heap_allocated) {
   if (size_ < sizeof(uint32)) {
@@ -97,7 +97,7 @@ class Block::Iter : public Iterator {
 
   // Return the offset in data_ just past the end of the current entry.
   inline uint32 NextEntryOffset() const {
-    return (value_.data() + value_.size()) - data_;
+    return (value_.ubuf() + value_.size()) - data_;
   }
 
   uint32 GetRestartPoint(uint32 index) {

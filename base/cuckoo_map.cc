@@ -41,6 +41,8 @@ inline bool is_power_2(uint32 v) {
   return ((v - 1) & v) == 0;
 }
 
+constexpr unsigned kMinBucketCount = 16;
+
 }  // namespace
 
 namespace base {
@@ -129,7 +131,7 @@ public:
 // Allocates space for at least the given number of key-values.
 CuckooMapTable::CuckooMapTable(const uint32 value_size, uint32 capacity) : value_size_(value_size) {
   static_assert(sizeof(Bucket) == 8*kBucketLength, "Wrong bucket size");
-  Init(16 + capacity / kBucketLength);
+  Init(kMinBucketCount + BucketFromId(capacity));
 }
 
 CuckooMapTable::~CuckooMapTable() {
@@ -377,10 +379,16 @@ void CuckooMapTable::DoAllocate() {
 
 bool CuckooMapTable::Compact(double ratio) {
   CHECK_GT(ratio, 1.001);
+  if (bucket_count_ < 128) {
+    // Do not bother compacting it.
+    return true;
+  }
   uint32 prev_reserved_buckets = bucket_count_;
   std::unique_ptr<uint8[]> old_buf(buf_.release());
-  BucketId desired_bucket_size = NextHigherPrime(1 + (BucketFromId(size()) * ratio));
-  VLOG(1) << "Current bucket size " << bucket_count_ << ", current utilization " <<  Utilization();
+  unsigned bucket_count_from_size = std::max(kMinBucketCount, 1 + BucketFromId(size() * ratio));
+  BucketId desired_bucket_size = NextHigherPrime(bucket_count_from_size);
+  VLOG(1) << "Current bucket size " << bucket_count_ << ", current utilization "
+          <<  Utilization() << " desired bucket size: " << desired_bucket_size;
   const int kMaxCompactTries = 10;
   for (int i = 0; i < kMaxCompactTries; ++i) {
     bucket_count_ = desired_bucket_size;

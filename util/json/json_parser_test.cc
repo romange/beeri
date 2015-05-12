@@ -131,22 +131,20 @@ TEST_F(JsonParserTest, Iterator) {
   auto root = parser_.root();
   EXPECT_EQ("{key1: [1, 2], key2: [3, 4], }\n", root.ToString());
 
-  auto it = root.GetObjectIterator();
+  auto it = root.GetArrayIterator();
   ASSERT_FALSE(it.Done());
-  auto key_val = it.GetKeyVal();
-  EXPECT_EQ("key1", key_val.first);
-  auto arr_it = key_val.second.GetArrayIterator();
-  EXPECT_EQ(1, arr_it.GetObj().GetInt());
+  EXPECT_EQ("key1", it->name());
+  auto arr_it = it->GetArrayIterator();
+  EXPECT_EQ(1, arr_it->GetInt());
   ++arr_it;
-  EXPECT_EQ(2, arr_it.GetObj().GetInt());
+  EXPECT_EQ(2, arr_it->GetInt());
   ++arr_it;
   EXPECT_TRUE(arr_it.Done());
 
   ++it;
   ASSERT_FALSE(it.Done());
-  key_val = it.GetKeyVal();
-  EXPECT_EQ("key2", key_val.first);
-  arr_it = key_val.second.GetArrayIterator();
+  EXPECT_EQ("key2", it->name());
+  arr_it = it->GetArrayIterator();
   EXPECT_EQ(3, arr_it.GetObj().GetInt());
   ++arr_it;
   EXPECT_EQ(4, arr_it.GetObj().GetInt());
@@ -183,14 +181,60 @@ TEST_F(JsonParserTest, Invalid) {
   ASSERT_FALSE(arr_it->is_defined());
 }
 
-void BM_Parse(uint32 iters) {
+TEST_F(JsonParserTest, Escaping) {
+  ASSERT_EQ(JsonParser::SUCCESS, parser_.Parse(R"( { foo : "\/bar\"" } )"));
+  auto foo = parser_["foo"];
+  EXPECT_EQ("/bar\"", foo.GetStringPiece());
+}
+
+TEST_F(JsonParserTest, Negatives) {
+  ASSERT_EQ(JsonParser::SUCCESS, parser_.Parse(" { foo : -5 } "));
+  auto foo = parser_["foo"];
+  EXPECT_EQ(-5, foo.GetInt());
+}
+
+TEST_F(JsonParserTest, FloatInvalid) {
+  ASSERT_EQ(JsonParser::INVALID_JSON, parser_.Parse(" { foo : 123.d } "));
+}
+
+TEST_F(JsonParserTest, BigInt64) {
+  // kint64max
+  ASSERT_EQ(JsonParser::SUCCESS, parser_.Parse(" { foo : 9223372036854775807 } "));
+  auto foo = parser_["foo"];
+  EXPECT_EQ(9223372036854775807, foo.GetInt());
+
+  ASSERT_EQ(JsonParser::SUCCESS, parser_.Parse(" { foo : 9223372036854775808 } "));
+  foo = parser_["foo"];
+  EXPECT_EQ(9223372036854775808UL, foo.GetUInt());
+}
+
+TEST_F(JsonParserTest, FloatingPoint) {
+  ASSERT_EQ(JsonParser::SUCCESS, parser_.Parse(" { foo: -1e-05 } "));
+
+  auto foo = parser_["foo"];
+  ASSERT_TRUE(foo.IsNumber());
+  EXPECT_EQ(-1e-05, foo.GetDouble());
+}
+
+
+TEST_F(JsonParserTest, Comments) {
+  ASSERT_EQ(JsonParser::SUCCESS, parser_.Parse(" { foo: /*  -1e-05  fdhfdh;lgfd;kl */  5} "));
+
+  auto foo = parser_["foo"];
+  ASSERT_TRUE(foo.IsNumber());
+  EXPECT_EQ(5, foo.GetInt());
+}
+
+
+
+void BM_Parse(benchmark::State& state) {
   StopBenchmarkTiming();
   string file = base::ProgramRunfile("bidRequestMopub.json");
   string contents;
   file_util::ReadFileToStringOrDie(file, &contents);
   JsonParser parser;
   StartBenchmarkTiming();
-  for (int i = 0; i < iters; ++i) {
+  while (state.KeepRunning()) {
     parser.Parse(contents);
   }
 }

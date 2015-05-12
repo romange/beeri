@@ -6,10 +6,14 @@
 
 #include <unordered_map>
 #include <unordered_set>
+
+#include <sparsehash/dense_hash_map>
+
 #include "base/arena.h"
 #include "base/counting_allocator.h"
 #include "strings/stringpiece.h"
 #include "strings/hash.h"
+
 
 class UniqueStrings {
 public:
@@ -38,62 +42,16 @@ private:
   SSet db_;
 };
 
-inline std::pair<StringPiece, bool> UniqueStrings::Insert(StringPiece source) {
-  auto it = db_.find(source);
-  if (it != db_.end())
-    return std::make_pair(*it, false);
-  if (source.empty()) {
-    auto res = db_.insert(StringPiece());
-    return std::make_pair(*res.first, res.second);
-  }
-  char* str = arena_.Allocate(source.size());
-  memcpy(str, source.data(), source.size());
-  StringPiece val(str, source.size());
-  db_.insert(val);
-  return std::make_pair(val, true);
-}
-
-template<typename T> class StringPieceMap {
-  typedef std::unordered_map<StringPiece, T> SMap;
+template<typename M> class ArenaMapBase {
+protected:
+  typedef M SMap;
 public:
+  ArenaMapBase() {}
+
   typedef typename SMap::iterator iterator;
   typedef typename SMap::const_iterator const_iterator;
   typedef typename SMap::value_type value_type;
-
-  std::pair<iterator,bool> insert(const value_type& val) {
-    auto it = map_.find(val.first);
-    if (it != map_.end())
-      return std::make_pair(it, false);
-    if (val.first.empty()) {
-      it = map_.emplace(StringPiece(), val.second).first;
-    } else {
-      char* str = arena_.Allocate(val.first.size());
-      memcpy(str, val.first.data(), val.first.size());
-      StringPiece pc(str, val.first.size());
-      it = map_.emplace(pc, val.second).first;
-    }
-    return std::make_pair(it, true);
-  }
-
-  std::pair<iterator,bool> emplace(StringPiece key, T&& val) {
-    auto it = map_.find(key);
-    if (it != map_.end())
-      return std::make_pair(it, false);
-    if (key.empty()) {
-      it = map_.emplace(StringPiece(), val).first;
-    } else {
-      char* str = arena_.Allocate(key.size());
-      memcpy(str, key.data(), key.size());
-      StringPiece pc(str, key.size());
-      it = map_.emplace(pc, val).first;
-    }
-    return std::make_pair(it, true);
-  }
-
-  T& operator[](StringPiece val) {
-    auto res = emplace(val, T());
-    return res.first->second;
-  }
+  typedef typename SMap::mapped_type mapped_type;
 
   iterator begin() { return map_.begin(); }
   const_iterator begin() const { return map_.begin(); }
@@ -104,20 +62,120 @@ public:
   iterator find(StringPiece id) { return map_.find(id); }
   const_iterator find(StringPiece id) const { return map_.find(id); }
 
-  void swap(StringPieceMap& other) {
+  void swap(ArenaMapBase& other) {
     map_.swap(other.map_);
     arena_.Swap(other.arena_);
-  }
-  size_t MemoryUsage() const {
-    return arena_.MemoryUsage() + map_.size()*(sizeof(StringPiece) + sizeof(T));
   }
 
   size_t size() const {
     return map_.size();
   }
-private:
+
+  void clear() {
+    map_.clear();
+    base::Arena().Swap(arena_);
+  }
+
+protected:
   base::Arena arena_;
-  std::unordered_map<StringPiece, T> map_;
+  M map_;
+
+  StringPiece AllocateStr(StringPiece inp) {
+    if (inp.empty())
+      return inp;
+    char* str = arena_.Allocate(inp.size());
+    memcpy(str, inp.data(), inp.size());
+    return StringPiece(str, inp.size());
+  }
 };
+
+template<typename T> class StringPieceMap
+    : public ArenaMapBase<std::unordered_map<StringPiece, T>> {
+  typedef ArenaMapBase<std::unordered_map<StringPiece, T>> Parent;
+public:
+  using typename Parent::value_type;
+  using Parent::map_;
+
+  std::pair<typename StringPieceMap::iterator, bool> insert(
+      const typename StringPieceMap::value_type& val) {
+    auto it = map_.find(val.first);
+    if (it != map_.end())
+      return std::make_pair(it, false);
+    if (val.first.empty()) {
+      it = map_.emplace(StringPiece(), val.second).first;
+    } else {
+      it = map_.emplace(AllocateStr(val.first), val.second).first;
+    }
+    return std::make_pair(it, true);
+  }
+
+  std::pair<typename StringPieceMap::iterator, bool> emplace(StringPiece key, T&& val) {
+    auto it = map_.find(key);
+    if (it != map_.end())
+      return std::make_pair(it, false);
+    it = map_.emplace(this->AllocateStr(key), std::move(val)).first;
+
+    return std::make_pair(it, true);
+  }
+
+  std::pair<typename StringPieceMap::iterator, bool> emplace(StringPiece key, const T& val) {
+    auto it = map_.find(key);
+    if (it != map_.end())
+      return std::make_pair(it, false);
+    it = map_.emplace(this->AllocateStr(key), val).first;
+
+    return std::make_pair(it, true);
+  }
+
+  T& operator[](StringPiece val) {
+    auto res = emplace(val, T());
+    return res.first->second;
+  }
+
+  size_t MemoryUsage() const {
+    return this->arena_.MemoryUsage() + map_.size()*sizeof(value_type);
+  }
+};
+
+template<typename T> class StringPieceDenseMap
+    : public ArenaMapBase< ::google::dense_hash_map<StringPiece, T>> {
+  typedef ArenaMapBase< ::google::dense_hash_map<StringPiece, T>> Parent;
+public:
+  using typename Parent::value_type;
+
+  StringPieceDenseMap() {
+    // Can not call it because dense_hash_map does not allow calling set_empty_key
+    // multiple times.
+    // set_empty_key(StringPiece());
+  }
+
+  void set_empty_key(StringPiece key) {
+    Parent::map_.set_empty_key(key);
+  }
+
+  std::pair<typename StringPieceDenseMap::iterator, bool> insert(
+      const typename StringPieceDenseMap::value_type& val) {
+    auto it = Parent::map_.find(val.first);
+    if (it != Parent::map_.end())
+      return std::make_pair(it, false);
+    it = Parent::map_.insert(value_type(Parent::AllocateStr(val.first), val.second)).first;
+    return std::make_pair(it, true);
+  }
+
+  T& operator[](StringPiece val) {
+    auto res = insert(value_type(val, T()));
+    return res.first->second;
+  }
+
+  std::pair<typename StringPieceDenseMap::iterator, bool> emplace(StringPiece key, const T& val) {
+    return insert(value_type(key, val));
+  }
+
+  size_t MemoryUsage() const {
+    return this->arena_.MemoryUsage() + this->map_.bucket_count()*sizeof(value_type);
+  }
+
+};
+
 
 #endif  // UNIQUE_STRINGS_H

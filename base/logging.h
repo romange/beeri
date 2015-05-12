@@ -1,3 +1,7 @@
+// Copyright 2014, Beeri 15.  All rights reserved.
+// Author: Roman Gershman (romange@gmail.com)
+//
+
 #ifndef _BASE_LOGGING_
 #define _BASE_LOGGING_
 

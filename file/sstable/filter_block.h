@@ -13,7 +13,7 @@
 #include <cstdint>
 #include <string>
 #include <vector>
-#include "strings/slice.h"
+#include "strings/stringpiece.h"
 
 namespace file {
 namespace sstable {

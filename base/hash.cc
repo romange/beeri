@@ -4,6 +4,7 @@
 // based on MurmurHash code.
 //
 #include "base/hash.h"
+#include <city.h>
 
 namespace {
 constexpr uint64_t k2 = 0x9ae16a3b2f90404fULL;
@@ -40,11 +41,6 @@ inline uint32_t Mur(uint32_t a, uint32_t h) {
   return h * 5 + 0xe6546b64;
 }
 
-
-inline uint64_t Rotate(uint64_t val, const int shift) {
-  // Avoid shifting by 64: doing so yields an undefined result.
-  return shift == 0 ? val : ((val >> shift) | (val << (64 - shift)));
-}
 
 }  // namespace
 
@@ -102,13 +98,11 @@ uint32_t MurmurHash3_x86_32(const uint8_t* data, uint32_t len, uint32_t seed) {
     return h1;
 }
 
-uint32_t CityHash32(uint64_t val) {
-  uint32_t a = 8, b = 8 * 5, c = 9, d = b;
-  a += val & uint32_t(-1);
-  val >>= 32;
-  b += val;
-  c += val;
-  return fmix(Mur(c, Mur(b, Mur(a, d))));
+uint64_t Fingerprint(const char* str, uint32_t len) {
+  uint64_t res = CityHash64(str, len);
+  if (__builtin_expect(!!(res > 1), 1))
+    return res;
+  return 2;
 }
 
 }  // namespace base

@@ -624,6 +624,10 @@ inline string SQLEscape(StringPiece src) {
   return BackslashEscape(src, "\\'\n\r\"\x1a");
 }
 
+inline std::string JSonDecode(StringPiece str) {
+  return strings::BackslashUnescape(str, "\\/\"");
+}
+
 }  // namespace strings
 
 #endif  // STRINGS_ESCAPING_H_

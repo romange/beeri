@@ -59,7 +59,7 @@ base::Status ReadonlyStringFile::Read(size_t offset, size_t length, strings::Sli
                                       uint8* buffer) {
   if (contents_.size() < offset + length)
     return base::Status(base::StatusCode::INTERNAL_ERROR);
-  result->set(reinterpret_cast<const uint8*>(contents_.data() + offset), length);
+  result->set(contents_.data() + offset, length);
   return base::Status::OK;
 }
 

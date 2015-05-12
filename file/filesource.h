@@ -5,28 +5,34 @@
 #define FILESOURCE_H
 
 #include "base/integral_types.h"
+#include "strings/stringpiece.h"
 #include "util/sinksource.h"
+
 #include <memory>
 
 namespace file {
+class ReadonlyFile;
 class File;
 
 class Source : public util::BufferredSource {
  public:
   // file must be open for reading.
-  Source(File* file, Ownership ownership, uint32 buffer_size = BufferredSource::kDefaultBufferSize);
+  Source(ReadonlyFile* file, Ownership ownership,
+         uint32 buffer_size = BufferredSource::kDefaultBufferSize);
   ~Source();
 
   // Moves the current file position relative to the current one.
   // Does not change the contents of the buffer.
-  util::Status SkipPos(uint64 offset);
+  base::Status SkipPos(uint64 offset);
 
   // Returns the source wrapping the file. If the file is compressed, than the stream
   // automatically inflates the compressed data. The returned source owns the file object.
-  static util::Source* Uncompressed(File* file);
+  static util::Source* Uncompressed(ReadonlyFile* file);
  private:
   bool RefillInternal();
-  File* file_;
+
+  ReadonlyFile* file_;
+  uint64 offset_ = 0;
   Ownership ownership_;
 };
 
@@ -35,8 +41,8 @@ public:
   // file must be open for writing.
   Sink(File* file, Ownership ownership) : file_(file), ownership_(ownership) {}
   ~Sink();
-  util::Status Append(strings::Slice slice);
-  util::Status Flush();
+  base::Status Append(strings::Slice slice);
+  base::Status Flush();
 
 private:
   File* file_;
@@ -65,6 +71,17 @@ private:
   util::Source* source_;
   Ownership ownership_;
   uint64 line_num_ = 0;
+};
+
+class CsvReader {
+  LineReader reader_;
+  std::function<void(const std::vector<StringPiece>&)> row_cb_;
+public:
+  explicit CsvReader(const std::string& filename,
+                     std::function<void(const std::vector<StringPiece>&)> row_cb);
+  void SkipHeader(unsigned rows = 1);
+
+  void Run();
 };
 
 }  // namespace file

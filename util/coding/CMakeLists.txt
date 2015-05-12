@@ -1,4 +1,5 @@
-add_library(coding bit_pack.cc coder.cc varint.cc int_coder.cc string_coder.cc)
+add_library(coding coder.cc varint.cc)
+#add_library(coding bit_pack.cc coder.cc varint.cc int_coder.cc string_coder.cc)
 cxx_link(coding base z fastpfor)
 cxx_test(coding_test coding file DATA testdata/small_numbers.txt testdata/medium2.txt)
 cxx_test(bit_pack_test coding)

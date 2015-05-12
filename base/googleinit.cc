@@ -1,4 +1,4 @@
-// Copyright 2014, Beeri 15.  All rights reserved.
+// Copyright 2013, Beeri 15.  All rights reserved.
 // Author: Roman Gershman (romange@gmail.com)
 //
 
@@ -23,7 +23,7 @@ ModuleInitializer::~ModuleInitializer() {
 #undef MainInitGuard
 
 MainInitGuard::MainInitGuard(int* argc, char*** argv) {
-  MallocExtension::Initialize();
+ // MallocExtension::Initialize();
   google::ParseCommandLineFlags(argc, argv, true);
   google::InitGoogleLogging((*argv)[0]);
 

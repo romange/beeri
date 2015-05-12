@@ -64,8 +64,7 @@ class Table {
   // for the duration of the returned table's lifetime.
   //
   // *file must remain live while this Table is in use.
-  static base::StatusObject<Table*> Open(const ReadOptions& options,
-      ReadonlyFile* file);
+  static base::StatusObject<Table*> Open(const ReadOptions& options, ReadonlyFile* file);
 
   ~Table();
 

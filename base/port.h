@@ -366,6 +366,9 @@ inline void* memrchr(const void* bytes, int find_char, size_t len) {
 //
 // For functions we want to force inline or not inline.
 // Introduced in gcc 3.1.
+#undef ATTRIBUTE_ALWAYS_INLINE
+#undef ATTRIBUTE_NOINLINE
+
 #define ATTRIBUTE_ALWAYS_INLINE  inline __attribute__ ((always_inline))
 #define HAVE_ATTRIBUTE_ALWAYS_INLINE 1
 #define ATTRIBUTE_NOINLINE __attribute__ ((noinline))
@@ -478,20 +481,6 @@ inline void* memrchr(const void* bytes, int find_char, size_t len) {
 #endif
 
 
-//
-// Tell the compiler to warn about unused return values for functions declared
-// with this macro.  The macro should be used on function declarations
-// following the argument list:
-//
-//   Sprocket* AllocateSprocket() MUST_USE_RESULT;
-//
-#if defined(SWIG)
-#define MUST_USE_RESULT
-#elif __GNUC__ > 3 || (__GNUC__ == 3 && __GNUC_MINOR__ >= 4)
-#define MUST_USE_RESULT __attribute__ ((warn_unused_result))
-#else
-#define MUST_USE_RESULT
-#endif
 
 #if defined(__GNUC__)
 // Defined behavior on some of the uarchs:

@@ -30,6 +30,9 @@ using file::File;
 // absolute path then JoinPath ignores dirname and simply returns basename.
 std::string JoinPath(StringPiece dirname, StringPiece basename);
 
+// Retrieve file name from a path. If path dosnt's contain dir returns the path itself.
+StringPiece GetNameFromPath(StringPiece path);
+
 // Tries to open the file under file_name in the given mode. Will fail if
 // there are any errors on the way.
 file::File* OpenOrDie(StringPiece file_name, StringPiece mode);
@@ -58,6 +61,8 @@ bool RecursivelyCreateDir(StringPiece path, int mode);
 void DeleteRecursively(StringPiece name);
 
 void TraverseRecursively(StringPiece path, std::function<void(StringPiece)> cb);
+
+int64_t LocalFileSize(StringPiece path);   // In bytes.
 
 class TempFile {
  public:

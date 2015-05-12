@@ -20,7 +20,7 @@
 #include <string>
 #include <vector>
 #include "base/logging.h"
-#include "base/port.h"
+
 #include "base/status.pb.h"
 
 // Status is used as a function return type to indicate success, failure or cancellation
@@ -37,6 +37,9 @@
 // }
 //
 namespace base {
+
+#define CPU_PREDICT_TRUE(x) (__builtin_expect(!!(x), 1))
+#define CPU_PREDICT_FALSE(x) (__builtin_expect(x, 0))
 
 class Status {
  public:
@@ -76,7 +79,7 @@ class Status {
   // same as copy c'tor
   Status& operator=(const Status& status) {
     delete error_detail_;
-    if (PREDICT_TRUE(status.error_detail_ == NULL)) {
+    if (CPU_PREDICT_TRUE(status.error_detail_ == NULL)) {
       error_detail_ = NULL;
     } else {
       error_detail_ = new ErrorDetail(*status.error_detail_);
@@ -109,6 +112,7 @@ class Status {
     return error_detail_ == NULL ? StatusCode::OK : error_detail_->error_code;
   }
 
+  friend std::ostream& operator<<(std::ostream& o, const base::Status& status);
  private:
   struct ErrorDetail {
     StatusCode::Code error_code;  // anything other than OK
@@ -128,9 +132,16 @@ class Status {
 // some generally useful macros
 #define RETURN_IF_ERROR(stmt) \
   do { \
-    Status __status__ = (stmt); \
-    if (PREDICT_FALSE(!__status__.ok())) return __status__; \
+    ::base::Status __status__ = (stmt); \
+    if (CPU_PREDICT_FALSE(!__status__.ok())) return __status__; \
   } while (false)
+
+#define CHECK_STATUS(stmt) \
+  do { \
+    ::base::Status __status__ = (stmt); \
+    CHECK(__status__.ok()) << __status__; \
+  } while (false)
+
 
 // Sometimes functions need to return both data object and status.
 // It's inconvenient to set this data object by reference via argument parameter.
@@ -147,7 +158,5 @@ template<typename T> struct StatusObject {
 };
 
 }  // namespace base
-
-extern std::ostream& operator<<(std::ostream& o, const base::Status& status);
 
 #endif

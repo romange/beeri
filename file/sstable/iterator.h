@@ -15,8 +15,8 @@
 #ifndef _FILE_SSTABLE_ITERATOR_H_
 #define _FILE_SSTABLE_ITERATOR_H_
 
-#include "strings/slice.h"
 #include "base/status.h"
+#include "strings/stringpiece.h"
 
 namespace file {
 namespace sstable {

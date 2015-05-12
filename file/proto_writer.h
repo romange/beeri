@@ -1,4 +1,4 @@
-// Copyright 2014, Beeri 15.  All rights reserved.
+// Copyright 2013, Beeri 15.  All rights reserved.
 // Author: Roman Gershman (romange@gmail.com)
 //
 #ifndef _PROTO_WRITER_H
@@ -46,7 +46,7 @@ class ProtoWriter {
   bool was_init_ = false;
   uint32 write_count_in_transaction_ = 0;
 public:
-  enum Format {LIST_FILE, KEY_TABLE, SSTABLE};
+  enum Format {LIST_FILE, SSTABLE};
 
   struct Options {
     Format format;

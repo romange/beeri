@@ -137,22 +137,42 @@ endfunction()
 
 function(cxx_proto_lib name)
   cur_gen_dir(gen_dir)
-  gen_cxx_files(srcs_full_path "cc" ${gen_dir} ${name}.pb)
+  gen_cxx_files(cxx_out_files "cc" ${gen_dir} ${name}.pb)
+
   GET_FILENAME_COMPONENT(absolute_proto_name ${name}.proto ABSOLUTE)
-  CMAKE_PARSE_ARGUMENTS(parsed "" "" "DEPENDS" ${ARGN})
+
+  CMAKE_PARSE_ARGUMENTS(parsed "PY;GRPC" "" "DEPENDS" ${ARGN})
+  set(prefix_command ${PROTOC} ${absolute_proto_name} --proto_path=${CMAKE_SOURCE_DIR})
+  set(py_command cat /dev/null)
+  if (parsed_PY)
+    set(py_command ${prefix_command} --python_out=${ROOT_GEN_DIR})
+  endif()
+  set(plugins_arg "")
+  set(gprc_include "")
+  set(proj_depends "protobuf_project")
+  if (parsed_GRPC)
+    set(plugins_arg "--grpc_out=${ROOT_GEN_DIR};--plugin=protoc-gen-grpc=${GRPC_PLUGIN}")
+
+    set(gprc_include "${GRPC_DIR}/include")
+    set(proj_depends "${proj_depends};grpc_project")
+    LIST(APPEND cxx_out_files ${gen_dir}/${name}.grpc.pb.cc)
+#    Message("cxx_out_files ${cxx_out_files}")
+  endif()
   ADD_CUSTOM_COMMAND(
-           OUTPUT ${srcs_full_path}
+           OUTPUT ${cxx_out_files}
            COMMAND ${PROTOC} ${absolute_proto_name}
-                   --proto_path=${CMAKE_SOURCE_DIR} --cpp_out=${ROOT_GEN_DIR}
-           DEPENDS ${name}.proto DEPENDS protobuf_project ${parsed_DEPENDS}
+                   --proto_path=${CMAKE_SOURCE_DIR} --proto_path=${PROTOBUF_INCLUDE_DIR}
+                   --cpp_out=${ROOT_GEN_DIR} --cpp_opt=cxx11  ${plugins_arg}
+           COMMAND ${py_command}
+           DEPENDS ${name}.proto DEPENDS ${proj_depends} ${parsed_DEPENDS}
            WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
            COMMENT "Generating sources from ${absolute_proto_name}" VERBATIM)
-  set_source_files_properties(${srcs_full_path}
+  set_source_files_properties(${cxx_out_files}
                               PROPERTIES GENERATED TRUE)
   set(lib_name "${name}_proto")
-  add_library(${lib_name} ${srcs_full_path})
+  add_library(${lib_name} ${cxx_out_files})
   target_link_libraries(${lib_name} ${parsed_DEPENDS} protobuf)
-  add_include(${lib_name} ${PROTOBUF_INCLUDE_DIR})
+  add_include(${lib_name} ${PROTOBUF_INCLUDE_DIR} ${gprc_include})
   add_compile_flag(${lib_name} "-DGOOGLE_PROTOBUF_NO_RTTI -Wno-unused-parameter")
 endfunction()
 
@@ -176,6 +196,7 @@ function(cxx_thrift_lib name)
  # ADD_CUSTOM_TARGET(${name}_target DEPENDS ${srcs_full_path})
   ADD_CUSTOM_COMMAND(
            OUTPUT ${srcs_full_path}
+           COMMAND mkdir -p ${gen_dir}
            # TODO: to add pure_enums option to thrift args.
            COMMAND ${THRIFTC} --gen cpp:include_prefix,dense --out ${gen_dir} -I ${CMAKE_SOURCE_DIR} ${name}.thrift
 
@@ -198,27 +219,30 @@ function(flex_lib name)
   GET_FILENAME_COMPONENT(_in ${name}.lex ABSOLUTE)
   cur_gen_dir(gen_dir)
   set(lib_name "${name}_flex")
-  set(full_path_depends ${CMAKE_CURRENT_SOURCE_DIR}/${name}.ih ${gen_dir}/${name}.h
-                        ${gen_dir}/plang_parser_base.h)
-  add_library(${lib_name} ${gen_dir}/${name}.cc ${full_path_depends})
 
   set(full_path_cc ${gen_dir}/${name}.cc ${gen_dir}/${name}_base.h ${gen_dir}/${name}.h)
   ADD_CUSTOM_COMMAND(
            OUTPUT ${full_path_cc}
-           COMMAND flexc++ ${_in} -i ${CMAKE_CURRENT_SOURCE_DIR}/${name}.ih
-                           -b ${gen_dir}/${name}_base.h -c ${gen_dir}/${name}.h
-                           --lex-source=${gen_dir}/${name}.cc --no-lines --target-directory=${gen_dir}
+           COMMAND mkdir -p ${gen_dir}
+           COMMAND ${CMAKE_COMMAND} -E create_symlink ${CMAKE_CURRENT_SOURCE_DIR}/${name}.ih ${gen_dir}/${name}.ih
+           COMMAND flexc++ ${_in} -i ${name}.ih
+                           -b ${name}_base.h -c ${name}.h
+                           --lex-source=${name}.cc --no-lines --target-directory=${gen_dir}
             #due to bug in flexc++, it does not create full path includes in scanner.cc, only local one.
             # as workaround, we soft link .ih file into genfiles directory
-           COMMAND ${CMAKE_COMMAND} -E create_symlink ${CMAKE_CURRENT_SOURCE_DIR}/${name}.ih ${gen_dir}/${name}.ih
            DEPENDS ${_in}
            WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
            COMMENT "Generating lexer from ${name}.lex" VERBATIM)
 
   set_source_files_properties(${gen_dir}/${name}.h ${gen_dir}/${name}.cc ${gen_dir}/${name}_base.h
                               PROPERTIES GENERATED TRUE)
+
+# TODO: to fix this by combining flex and bison rules into one library.
+  set(full_path_depends ${gen_dir}/${name}.h
+                        ${gen_dir}/${name}_base.h ${gen_dir}/plang_parser_base.h)
+  add_library(${lib_name} ${gen_dir}/${name}.cc ${full_path_depends})
   add_compile_flag(${lib_name} "-Wno-extra")
-  target_link_libraries(${lib_name})
+  target_link_libraries(${lib_name} glog)
 endfunction()
 
 function(bison_lib name)
@@ -230,8 +254,12 @@ function(bison_lib name)
   set(full_path_cc ${gen_dir}/${name}.cc ${gen_dir}/${name}_base.h)
   ADD_CUSTOM_COMMAND(
            OUTPUT ${full_path_cc}
-           COMMAND bisonc++ ${name}.y -p ${gen_dir}/${name}.cc -c ${CMAKE_CURRENT_SOURCE_DIR}/${name}.h
-                            -b ${gen_dir}/${name}_base.h -i ${CMAKE_CURRENT_SOURCE_DIR}/${name}.ih
+           COMMAND mkdir -p ${gen_dir}
+           COMMAND ${CMAKE_COMMAND} -E create_symlink ${CMAKE_CURRENT_SOURCE_DIR}/${name}_includes.h ${gen_dir}/${name}_includes.h
+           COMMAND ${CMAKE_COMMAND} -E create_symlink ${CMAKE_CURRENT_SOURCE_DIR}/${name}.h ${gen_dir}/${name}.h
+           COMMAND ${CMAKE_COMMAND} -E create_symlink ${CMAKE_CURRENT_SOURCE_DIR}/${name}.ih ${gen_dir}/${name}.ih
+           COMMAND bisonc++ ${name}.y -p ${name}.cc -c ${name}.h --target-directory=${gen_dir}
+                            -b ${name}_base.h -i ${name}.ih
            DEPENDS ${_in}
            WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
            COMMENT "Generating parser from ${name}.y" VERBATIM)
@@ -242,8 +270,8 @@ endfunction()
 function(cxx_test name)
   add_executable(${name} ${name}.cc)
   add_compile_flag(${name} "-Wno-sign-compare")
-  add_include(${name} ${GTEST_INCLUDE_DIR} ${GMOCK_INCLUDE_DIR})
-  cxx_link(${name} gtest_main gtest gmock ${ARGN})
+  add_include(${name} ${GTEST_INCLUDE_DIR} ${GMOCK_INCLUDE_DIR} ${BENCHMARK_INCLUDE_DIR})
+  cxx_link(${name} gtest_main gtest gmock benchmark ${ARGN})
   if (CMAKE_USE_PTHREADS_INIT)
     target_link_libraries(${name} ${CMAKE_THREAD_LIBS_INIT})
   endif()

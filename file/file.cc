@@ -26,10 +26,10 @@
 
 #include "base/logging.h"
 #include "base/macros.h"
-#include "file/s3_file.h"
 
 using std::string;
 using base::Status;
+using base::StatusCode;
 using strings::Slice;
 
 namespace file {
@@ -53,7 +53,7 @@ Status LocalFileError() {
 #else
   const char* s = strerror_r(errno, buf, arraysize(buf));
 #endif
-  return Status(base::StatusCode::IO_ERROR, s);
+  return Status(StatusCode::IO_ERROR, s);
 }
 
 // ----------------- LocalFileImpl --------------------------------------------
@@ -75,10 +75,9 @@ class LocalFileImpl : public File {
   virtual bool Open();
   // virtual bool Delete();
   virtual bool Close();
-  virtual Status Read(size_t length, uint8* OUTPUT, size_t* read_length);
+
   // virtual char* ReadLine(char* buffer, uint64 max_length);
   Status Write(const uint8* buffer, uint64 length, uint64* bytes_written);
-  Status Seek(int64 position, int whence);
   Status Flush();
   bool eof();
 
@@ -183,34 +182,6 @@ bool LocalFileImpl::Close() {
   return result;
 }
 
-Status LocalFileImpl::Read(size_t length, uint8* buffer, size_t* read_length) {
-  CHECK_NOTNULL(buffer);
-  CHECK_NOTNULL(internal_file_);
-  CHECK_NOTNULL(read_length);
-  uint64 bytes_to_read = 0;
-  uint64 bytes_read = 0;
-  *read_length = 0;
-  do {
-    bytes_to_read = std::min(length - *read_length, size_t(kuint64max));
-    bytes_read = fread(buffer + *read_length, 1, bytes_to_read, internal_file_);
-    if (bytes_read < bytes_to_read && ferror(internal_file_)) {
-      LOG(ERROR) << "Error on read, " << bytes_read << " out of "
-                 << bytes_to_read << " bytes read; file: "
-                 << create_file_name_;
-      return LocalFileError();
-    }
-    *read_length += bytes_read;
-  } while (*read_length != length && bytes_read == bytes_to_read);
-  /*if (feof(internal_file_))
-    return Status(base::StatusCode::END_OF_STREAM);*/
-  return Status::OK;
-}
-
-/*char* LocalFileImpl::ReadLine(char* buffer, uint64 max_length) {
-  if (internal_file_ == NULL) return NULL;
-  return (fgets(buffer, static_cast<int>(max_length), internal_file_));
-}*/
-
 Status LocalFileImpl::Write(const uint8* buffer, uint64 length, uint64* bytes_written) {
   CHECK_NOTNULL(buffer);
   CHECK_NOTNULL(internal_file_);
@@ -221,21 +192,6 @@ Status LocalFileImpl::Write(const uint8* buffer, uint64 length, uint64* bytes_wr
   // since caller should not assume that a "successful" write makes it to
   // disk before Flush() or Close(), which already check ferror().
   return ferror(internal_file_) ? LocalFileError() : Status::OK;
-}
-
-// The following require a bunch of assertions to make sure
-// the 32 to 64 bit conversions are ok.
-Status LocalFileImpl::Seek(int64 position, int whence) {
-  CHECK_NOTNULL(internal_file_);
-  /*if (whence SEEK_SET position < 0) {
-    LOG(ERROR) << "Invalid seek position parameter: " << position
-               << " on file " << create_file_name_;
-    return false;
-  }*/
-  if (FSEEKO(internal_file_, static_cast<off_t>(position), whence) != 0) {
-    return LocalFileError();
-  }
-  return Status::OK;
 }
 
 Status LocalFileImpl::Flush() {
@@ -272,9 +228,6 @@ File* Open(StringPiece file_name, StringPiece mode) {
 }
 
 bool Exists(StringPiece fname) {
-  if (IsInS3Namespace(fname)) {
-    return ExistsS3File(fname);
-  }
   return access(fname.data(), F_OK) == 0;
 }
 
@@ -296,7 +249,7 @@ class PosixMmapReadonlyFile : public ReadonlyFile {
 public:
   PosixMmapReadonlyFile(void* base, size_t sz) : base_(base), sz_(sz) {}
 
-  ~PosixMmapReadonlyFile() {
+  virtual ~PosixMmapReadonlyFile() {
     if (base_) {
       LOG(WARNING) << " ReadonlyFile::Close was not called";
       Close();
@@ -315,13 +268,17 @@ public:
 Status PosixMmapReadonlyFile::Read(
     size_t offset, size_t length, Slice* result, uint8* buffer) {
   Status s;
+  result->clear();
+  if (length == 0) return s;
+  if (offset > sz_) {
+    return Status(StatusCode::RUNTIME_ERROR, "Invalid read range");
+  }
   if (offset + length > sz_) {
-    *result = Slice();
-    return Status(base::StatusCode::INTERNAL_ERROR, "Invalid read range");
+    length = sz_ - offset;
   }
   *result = Slice(reinterpret_cast<char*>(base_) + offset, length);
 
-  return s;
+  return Status::OK;
 }
 
 Status PosixMmapReadonlyFile::Close() {
@@ -332,10 +289,54 @@ Status PosixMmapReadonlyFile::Close() {
   return Status::OK;
 }
 
-base::StatusObject<ReadonlyFile*> ReadonlyFile::Open(StringPiece name) {
-  if (IsInS3Namespace(name)) {
-    return OpenS3File(name);
+// pread() based random-access
+class PosixRandomAccessFile: public ReadonlyFile {
+private:
+  int fd_;
+  size_t file_size_;
+
+ public:
+  PosixRandomAccessFile(int fd, size_t sz) : fd_(fd), file_size_(sz) {
+#if defined(HAVE_FADVISE)
+    posix_fadvise(fd_, 0, file_size_, POSIX_FADV_RANDOM);
+#endif
   }
+
+  virtual ~PosixRandomAccessFile() {
+    Close();
+  }
+
+  Status Close() override {
+    if (fd_) {
+#if defined(HAVE_FADVISE)
+      posix_fadvise(fd_, 0, file_size_, POSIX_FADV_DONTNEED);
+#endif
+      close(fd_);
+      fd_ = 0;
+    }
+    return Status::OK;
+  }
+
+  Status Read(size_t offset, size_t length, Slice* result, uint8* buffer) override {
+    result->clear();
+    if (length == 0) return Status::OK;
+    if (offset > file_size_) {
+      return Status(StatusCode::RUNTIME_ERROR, "Invalid read range");
+    }
+    Status s;
+    ssize_t r = pread(fd_, buffer, length, offset);
+    if (r < 0) {
+      return LocalFileError();
+    }
+    *result = Slice(buffer, r);
+
+    return s;
+  }
+
+  size_t Size() const override { return file_size_; }
+};
+
+base::StatusObject<ReadonlyFile*> ReadonlyFile::Open(StringPiece name, const Options& opts) {
   int fd = open(name.data(), O_RDONLY);
   if (fd < 0) {
     return LocalFileError();
@@ -345,9 +346,16 @@ base::StatusObject<ReadonlyFile*> ReadonlyFile::Open(StringPiece name) {
     close(fd);
     return LocalFileError();
   }
-  void* base = mmap(NULL, sb.st_size, PROT_READ, MAP_SHARED, fd, 0);
+  if (!opts.use_mmap) {
+    return new PosixRandomAccessFile(fd, sb.st_size);
+  }
+
+  // MAP_NORESERVE - we do not want swap space for this mmap. Also we allow
+  // overcommitting here (see proc(5)) because this mmap is not allocated from RAM.
+  void* base = mmap(NULL, sb.st_size, PROT_READ, MAP_SHARED | MAP_NORESERVE, fd, 0);
   close(fd);
   if (base == MAP_FAILED) {
+    VLOG(1) << "Mmap failed " << strerror(errno);
     return LocalFileError();
   }
   return new PosixMmapReadonlyFile(base, sb.st_size);

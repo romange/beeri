@@ -17,6 +17,9 @@ std::ostream& operator<<(std::ostream& os, const JsonObject::Value& v) {
     case JsonObject::INTEGER:
       os << v.u.int_val;
       break;
+    case JsonObject::UINT:
+      os << v.u.uint_val;
+      break;
     case JsonObject::OBJECT:
     case JsonObject::ARRAY:
       os << v.u.children.immediate << ", " << v.u.children.transitive;
@@ -53,11 +56,14 @@ static JsonParser::Status parse_primitive(StringPiece str, JsonObject::Value* va
       case '\t': case '\r' : case '\n' : case ' ' :
       case ',' : case ']'  : case '}' :
         goto found;
+
       case '.':
+      case 'e':
+      case 'E':
         is_float = true;
         break;
       default:
-        if (c > '9')
+        if (c > '9')   // '-'' is below '0' so it's covered by is_number
           is_number = false;
     }
     if (c < 32 || c >= 127) {
@@ -68,13 +74,19 @@ static JsonParser::Status parse_primitive(StringPiece str, JsonObject::Value* va
 
 found:
   errno = 0;
-  char* endptr = nullptr;
-  if (is_float) {
+  if (is_number && is_float) {
     val->type = JsonObject::DOUBLE;
-    val->u.d_val = strtod(str.data(), &endptr);
+    bool res = safe_strtod(str.substr(0, i), &val->u.d_val);
+    if (!res) return JsonParser::INVALID_JSON;
   } else if (is_number) {
-    val->type = JsonObject::INTEGER;
-    val->u.int_val = strtoll(str.data(), &endptr, 10);
+    bool res = safe_strto64(str.substr(0, i), &val->u.int_val);
+    if (!res) {
+      res = safe_strtou64(str.substr(0, i), &val->u.uint_val);
+      if (!res) return JsonParser::INVALID_JSON;
+      val->type = JsonObject::UINT;
+    } else {
+      val->type = JsonObject::INTEGER;
+    }
   } else if (i == 4 && str.starts_with("null")) {
     val->type = JsonObject::PRIMITIVE;
     val->u.primitive = JsonObject::NULL_V;
@@ -96,7 +108,7 @@ found:
    }
   }
   *skip = i - 1;
-  return errno ? JsonParser::INVALID_JSON : JsonParser::SUCCESS;
+  return JsonParser::SUCCESS;
 }
 
 static JsonParser::Status parse_string(StringPiece str, JsonObject::Value* val) {
@@ -207,6 +219,21 @@ JsonParser::Status JsonParser::Parse(StringPiece str) {
         }
         break;
       /* In non-strict mode every unquoted value is a primitive */
+      case '/':
+        if (pos + 1 == str.size()) return INVALID_JSON;
+        if (str[++pos] != '*') return INVALID_JSON;
+        {
+          bool comment_end = false;
+          for (++pos; pos + 1 < str.size(); ++pos) {
+            if (str[pos] == '*' && str[pos + 1] == '/') {
+              comment_end = true;
+              break;
+            }
+          }
+          if (!comment_end) return INVALID_JSON;
+          ++pos;
+        }
+      break;
       default: {
           uint32 skip = 0;
           st = parse_primitive(StringPiece(str, pos), &val, &skip);
@@ -234,17 +261,17 @@ JsonObject JsonObject::get(StringPiece key) const {
      return JsonObject::Undefined();
    }
    DCHECK_LT(root.transitive_size(), slice_.size());
-   ObjectIterator it(ValueSlice(slice_, 1, root.transitive_size()), check_fail_on_schema_errors_);
+   ArrayIterator it(ValueSlice(slice_, 1, root.transitive_size()), check_fail_on_schema_errors_,
+                    false);
    for (; !it.Done(); ++it) {
-     auto key_val = it.GetKeyVal();
-     if (key_val.first == key) {
-       JsonObject res(key_val.second);
-       return res;
+     if (it->name() == key) {
+       return *it;
      }
    }
    return JsonObject(nullptr, false, key);
 }
 
+#if 0
 JsonObject::ObjectIterator JsonObject::GetObjectIterator() const {
   if (type() == JsonObject::OBJECT) {
     return ObjectIterator(ValueSlice(slice_, 1, slice_[0].transitive_size()),
@@ -257,6 +284,7 @@ JsonObject::ObjectIterator JsonObject::GetObjectIterator() const {
   LOG(FATAL) << "Non object type: " << type();
   return ObjectIterator(); // never gets here.
 }
+#endif
 
 JsonObject::ArrayIterator JsonObject::GetArrayIterator() const {
   Type t = type();
@@ -280,19 +308,36 @@ JsonObject::ArrayIterator JsonObject::GetArrayIterator() const {
 
 StringPiece JsonObject::GetStr() const {
   CHECK_EQ(type(), JsonObject::STRING) << name_;
-  return slice_[0].token();
+  StringPiece t = slice_[0].token();
+  if (t.find('\\') != StringPiece::npos) {
+    BackslashUnescape(t, "/\"\\", &tmp_);
+    return tmp_;
+  }
+  return t;
 }
 
 int64 JsonObject::GetInt() const {
-  CHECK_EQ(type(), JsonObject::INTEGER);
+  CHECK_EQ(type(), JsonObject::INTEGER) << ToString();
   return slice_[0].u.int_val;
 }
 
+uint64 JsonObject::GetUInt() const {
+  CHECK_EQ(type(), JsonObject::UINT) << ToString();
+  return slice_[0].u.uint_val;
+}
+
 double JsonObject::GetDouble() const {
-  CHECK(type() == JsonObject::DOUBLE || type() == JsonObject::INTEGER);
-  if (type() == JsonObject::DOUBLE)
-    return slice_[0].u.d_val;
-  return slice_[0].u.int_val;
+  switch(type()) {
+    case JsonObject::DOUBLE:
+      return slice_[0].u.d_val;
+    case JsonObject::INTEGER:
+      return slice_[0].u.int_val;
+    case JsonObject::UINT:
+      return slice_[0].u.uint_val;
+    default:
+      LOG(FATAL) << type() << " is not a number type";
+  }
+  return 0;
 }
 
 bool JsonObject::GetBool() const {

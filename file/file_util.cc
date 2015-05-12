@@ -116,6 +116,14 @@ string JoinPath(StringPiece dirname, StringPiece basename) {
   }
 }
 
+StringPiece GetNameFromPath(StringPiece path) {
+  size_t file_name_pos = path.find_last_of('/');
+  if (file_name_pos == StringPiece::npos) {
+    return path.data();
+  }
+  return path.data() + file_name_pos + 1;
+}
+
 File* OpenOrDie(StringPiece file_name, StringPiece mode) {
   CHECK(!file_name.empty());
   File* fp = file::Open(file_name, mode);
@@ -129,16 +137,26 @@ File* OpenOrDie(StringPiece file_name, StringPiece mode) {
 
 bool ReadFileToString(StringPiece name, string* output) {
   uint8 buffer[1024];
-  file::FileCloser fcloser(file::Open(name, "r"));
-  if (fcloser.get() == nullptr) return false;
+  auto res = file::ReadonlyFile::Open(name);
+  if (!res.ok())
+    return false;
 
   Status status;
-  while (!fcloser->eof() && status.ok()) {
-    size_t read_size = 0;
-    status = fcloser->Read(sizeof(buffer), buffer, &read_size);
-    output->append(reinterpret_cast<char*>(buffer), read_size);
-  }
-  return status.ok();
+  file::ReadonlyFile* fl = CHECK_NOTNULL(res.obj);
+  strings::Slice slice;
+  size_t offset = 0;
+  size_t sz = fl->Size();
+  while (offset < sz) {
+    size_t chunk_size = std::min(sz - offset, arraysize(buffer));
+    status = fl->Read(offset, chunk_size, &slice, buffer);
+    if (!status.ok()) {
+      return false;
+    }
+    output->append(slice.data(), slice.size());
+    offset += chunk_size;
+  };
+
+  return fl->Close().ok();
 }
 
 void ReadFileToStringOrDie(StringPiece name, string* output) {
@@ -211,6 +229,15 @@ void TraverseRecursively(StringPiece path, std::function<void(StringPiece)> cb) 
   uint32 factor = !path.ends_with("/");
   TraverseRecursivelyInternal(path, cb, path.size() + factor);
 }
+
+int64_t LocalFileSize(StringPiece path) {
+  struct stat statbuf;
+  if (stat(path.data(), &statbuf) == -1) {
+    return -1;
+  }
+  return statbuf.st_size;
+}
+
 
 // Tries to create a tempfile in directory 'directory_prefix' or get a
 // directory from GetExistingTempDirectories().

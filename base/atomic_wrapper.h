@@ -21,12 +21,14 @@ template <typename T> struct atomic_wrapper {
 public:
   atomic_wrapper() : a_(0) {}
 
-  atomic_wrapper(const std::atomic<T> &a) :a_(a.load()) {}
+  atomic_wrapper(const std::atomic<T>& a) :a_(a.load()) {}
 
   atomic_wrapper(const atomic_wrapper &other) :a_(other.a_.load())  {}
+  explicit atomic_wrapper(const T& a) :a_(a) {}
 
-  atomic_wrapper &operator=(const atomic_wrapper &other) {
+  atomic_wrapper& operator=(const atomic_wrapper &other) {
     a_.store(other.a_.load());
+    return *this;
   }
 
   std::atomic<T>& atomic() { return a_; }
@@ -55,6 +57,10 @@ public:
 
   T fetch_sub(T arg, std::memory_order order) {
     return a_.fetch_sub(arg, order);
+  }
+
+  void AtomicInc() {
+    a_.fetch_add(1, std::memory_order_relaxed);
   }
 };
 

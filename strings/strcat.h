@@ -12,6 +12,7 @@
 #include "strings/numbers.h"
 #include "strings/stringpiece.h"
 
+using std::string;
 // The AlphaNum type was designed to be used as the parameter type for StrCat().
 // I suppose that any routine accepting either a string or a number could accept
 // it.  The basic idea is that by accepting a "const AlphaNum &" as an argument
@@ -61,6 +62,17 @@ struct AlphaNum {
   StringPiece::size_type size() const { return piece.size(); }
   const char *data() const { return piece.data(); }
 
+  AlphaNum(const AlphaNum& other) : piece(digits, other.piece.size()) {
+    memcpy(digits, other.digits, kFastToBufferSize);
+  }
+
+  AlphaNum& operator=(const AlphaNum& other) {
+    if (this != &other) {
+      memcpy(digits, other.digits, kFastToBufferSize);
+      piece.set(digits, other.piece.size());
+    }
+    return *this;
+  }
  private:
   // Use ":" not ':'
   AlphaNum(char c);  // NOLINT(runtime/explicit)

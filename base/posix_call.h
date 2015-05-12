@@ -10,7 +10,7 @@
 
 namespace base {
 
-std::string PosixStrError() {
+inline std::string PosixStrError() {
   char buf[1024];
   strerror_r(errno, buf, sizeof buf);
   return buf;

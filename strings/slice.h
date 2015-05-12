@@ -208,6 +208,7 @@ template<typename T> bool operator==(const SliceBase<T>& a, const SliceBase<T>& 
   return a.equals(b);
 }
 
+#if 0
 class Slice : public SliceBase<unsigned char> {
   typedef SliceBase<unsigned char> Base;
 public:
@@ -251,6 +252,7 @@ public:
   static Slice FromCstr(const char* cstr) { return Slice(cstr, strlen(cstr)); }
 };
 
+#endif
 }  // namespace strings
 
 #endif  // SLICE_H

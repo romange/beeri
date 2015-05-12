@@ -209,7 +209,7 @@ void AppendTo(Container* container, Splitter splitter) {
     // "Appending" to an empty container is by far the common case. For this we
     // assign directly to the output container, which is more efficient than
     // explicitly appending.
-    *container = splitter;  // Calls implicit conversion operator.
+    *container = Container(splitter);  // Calls implicit conversion operator.
   } else {
     AppendToImpl(container, splitter);
   }
@@ -283,44 +283,11 @@ void ClipString(string* full_str, uint32 max_len) {
   }
 }
 
-void SplitStringIntoNPiecesAllowEmpty(const string& full,
-                                      const char* delim,
-                                      uint32 pieces,
-                                      vector<string>* result) {
-  if (pieces == 0) {
-    // No limit when pieces is 0.
-    AppendTo(result, strings::Split(full, AnyOf(delim)));
-  } else {
-    // The input argument "pieces" specifies the max size that *result should
-    // be. However, the argument to the Limit() delimiter is the max number of
-    // delimiters, which should be one less than "pieces". Example: "a,b,c" has
-    // 3 pieces and two comma delimiters.
-    int limit = std::max(pieces - 1, 0U);
-    AppendTo(result, strings::Split(full, Limit(AnyOf(delim), limit)));
-  }
-}
-
-// ----------------------------------------------------------------------
-// SplitStringAllowEmpty
-//    Split a string using a character delimiter. Append the components
-//    to 'result'.  If there are consecutive delimiters, this function
-//    will return corresponding empty strings.
-// ----------------------------------------------------------------------
-void SplitStringAllowEmpty(const string& full, const char* delim,
-                           vector<string>* result) {
-  AppendTo(result, strings::Split(full, AnyOf(delim)));
-}
-
 void SplitStringUsing(const string& full,
                       const char* delim,
                       vector<string>* result) {
   AppendTo(result, strings::Split(full, AnyOf(delim), strings::SkipEmpty()));
 }
-
-/*void SplitStringToHashsetUsing(const string& full, const char* delim,
-                               hash_set<string>* result) {
-  AppendTo(result, strings::Split(full, AnyOf(delim), strings::SkipEmpty()));
-}*/
 
 void SplitStringToSetUsing(const string& full, const char* delim,
                            std::set<string>* result) {

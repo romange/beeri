@@ -8,7 +8,7 @@
 
 #include <string>
 #include <stdint.h>
-#include "strings/slice.h"
+#include "strings/stringpiece.h"
 #include "base/status.h"
 #include "file/sstable/options.h"
 

@@ -18,14 +18,12 @@
 #define STRINGS_SPLIT_INTERNAL_H_
 
 #include <iterator>
-using std::back_insert_iterator;
-using std::iterator_traits;
 #include <map>
 using std::map;
-using std::multimap;
 #include <vector>
 using std::vector;
 
+#include "base/port.h"
 #include "base/type_traits.h"  // for LANG_CXX11
 #include "strings/stringpiece.h"
 
@@ -159,16 +157,16 @@ struct StringPieceTo {
 
 // Specialization for converting to string.
 template <>
-struct StringPieceTo<string> {
-  string operator()(StringPiece from) const {
+struct StringPieceTo<std::string> {
+  std::string operator()(StringPiece from) const {
     return from.ToString();
   }
 };
 
-// Specialization for converting to *const* string.
+// Specialization for converting to *const* std::string.
 template <>
-struct StringPieceTo<const string> {
-  string operator()(StringPiece from) const {
+struct StringPieceTo<const std::string> {
+  std::string operator()(StringPiece from) const {
     return from.ToString();
   }
 };
@@ -387,7 +385,7 @@ class Splitter {
   // generic case. There is an overload of this function to optimize for the
   // common case of a vector<string>.
   template <typename Container>
-  void ConvertContainer(const vector<StringPiece>& vin, Container* c) {
+  void ConvertContainer(const std::vector<StringPiece>& vin, Container* c) {
     typedef typename Container::value_type ToType;
     internal::StringPieceTo<ToType> converter;
     std::insert_iterator<Container> inserter(*c, c->begin());

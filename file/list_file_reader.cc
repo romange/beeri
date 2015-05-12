@@ -12,9 +12,11 @@
 
 namespace file {
 
-using util::Status;
+using base::Status;
 using base::StatusCode;
+using file::ReadonlyFile;
 using strings::Slice;
+using std::string;
 using namespace ::util;
 using namespace list_file;
 
@@ -26,7 +28,9 @@ ListReader::ListReader(file::ReadonlyFile* file, Ownership ownership, bool check
 
 ListReader::ListReader(StringPiece filename, bool checksum, CorruptionReporter reporter)
     : ownership_(TAKE_OWNERSHIP), reporter_(reporter), checksum_(checksum) {
-  auto res = file::ReadonlyFile::Open(filename);
+  ReadonlyFile::Options opts;
+  opts.use_mmap = false;
+  auto res = ReadonlyFile::Open(filename, opts);
   CHECK(res.ok()) << res.status << ", file name: " << filename;
   file_ = res.obj;
   CHECK(file_) << filename;
@@ -62,15 +66,16 @@ bool ListReader::ReadRecord(Slice* record, std::string* scratch) {
   while (true) {
     if (array_records_ > 0) {
       uint32 item_size = 0;
-      const uint8* item_ptr = Varint::Parse32WithLimit(array_store_.begin(), array_store_.end(),
+      const uint8* aend = reinterpret_cast<const uint8*>(array_store_.end());
+      const uint8* item_ptr = Varint::Parse32WithLimit(array_store_.ubuf(), aend,
                                                        &item_size);
-      if (item_ptr == nullptr || item_ptr + item_size > array_store_.end()) {
+      const uint8* next_rec_ptr = item_ptr + item_size;
+      if (item_ptr == nullptr || next_rec_ptr > aend) {
         ReportCorruption(array_store_.size(), "invalid array record");
         array_records_ = 0;
       } else {
-        const uint8* next = item_ptr + item_size;
-        array_store_.set(next, array_store_.end() - next);
-        record->set(item_ptr, item_size);
+        array_store_.remove_prefix(next_rec_ptr - array_store_.ubuf());
+        *record = StringPiece(item_ptr, item_size);
         --array_records_;
         return true;
       }
@@ -109,7 +114,7 @@ bool ListReader::ReadRecord(Slice* record, std::string* scratch) {
           ReportCorruption(fragment.size(),
                            "missing start of fragmented record(1)");
         } else {
-          scratch->append(reinterpret_cast<const char*>(fragment.data()), fragment.size());
+          scratch->append(fragment.data(), fragment.size());
         }
         break;
 
@@ -118,7 +123,7 @@ bool ListReader::ReadRecord(Slice* record, std::string* scratch) {
           ReportCorruption(fragment.size(),
                            "missing start of fragmented record(2)");
         } else {
-          scratch->append(reinterpret_cast<const char*>(fragment.data()), fragment.size());
+          scratch->append(fragment.data(), fragment.size());
           *record = Slice(*scratch);
           // last_record_offset_ = prospective_record_offset;
           return true;
@@ -126,16 +131,16 @@ bool ListReader::ReadRecord(Slice* record, std::string* scratch) {
         break;
       case kArrayType: {
         if (in_fragmented_record) {
-            ReportCorruption(scratch->size(), "partial record without end(1)");
+          ReportCorruption(scratch->size(), "partial record without end(1)");
         }
         uint32 array_records = 0;
-        const uint8* array_ptr = Varint::Parse32WithLimit(fragment.begin(), fragment.end(),
-                                                          &array_records);
+        const uint8* array_ptr = Varint::Parse32WithLimit(fragment.ubuf(),
+              fragment.ubuf() + fragment.size(), &array_records);
         if (array_ptr == nullptr || array_records == 0) {
           ReportCorruption(fragment.size(), "invalid array record");
         } else {
           array_records_ = array_records;
-          array_store_.set(array_ptr, fragment.end() - array_ptr);
+          array_store_ = StringPiece(array_ptr, fragment.end() - strings::charptr(array_ptr));
         }
       }
       break;
@@ -208,21 +213,21 @@ bool ListReader::ReadHeader() {
     st = file_->Read(file_offset_, sizeof meta_header, &result, meta_header);
     EXIT_ON_ERROR;
     file_offset_ += result.size();
-    uint32 length = coding::DecodeFixed32(result.data() + 4);
-    uint32 crc = crc32c::Unmask(coding::DecodeFixed32(result.data()));
+    uint32 length = coding::DecodeFixed32(result.ubuf() + 4);
+    uint32 crc = crc32c::Unmask(coding::DecodeFixed32(result.ubuf()));
     std::unique_ptr<uint8[]> meta_buf(new uint8[length]);
     st = file_->Read(file_offset_, length, &result, meta_buf.get());
     EXIT_ON_ERROR;
     CHECK_EQ(result.size(), length);
     file_offset_ += result.size();
-    uint32 actual_crc = crc32c::Value(result.data(), result.size());
+    uint32 actual_crc = crc32c::Value(result.ubuf(), result.size());
     if (crc != actual_crc) {
       block_size_ = 0; eof_ = true;
       LOG(ERROR) << "Corrupted meta data";
       return false;
     }
-    const uint8* end = result.end();
-    const uint8* ptr = Varint::Parse32WithLimit(result.begin(), end, &length);
+    const uint8* end = reinterpret_cast<const uint8*>(result.end());
+    const uint8* ptr = Varint::Parse32WithLimit(result.ubuf(), end, &length);
     for (uint32 i = 0; i < length; ++i) {
       string key, val;
       ptr = DecodeString(ptr, end, &key);
@@ -285,7 +290,7 @@ unsigned int ListReader::ReadPhysicalRecord(Slice* result) {
     }
 
     // Parse the header
-    const uint8* header = block_buffer_.data();
+    const uint8* header = block_buffer_.ubuf();
     const uint8 type = header[8];
     uint32 length = coding::DecodeFixed32(header + 4);
     if (length + kBlockHeaderSize > block_buffer_.size()) {

@@ -35,7 +35,6 @@
 #endif
 
 #include <functional>
-using std::binary_function;
 using std::less;
 #include <string>
 using std::string;
@@ -95,6 +94,16 @@ inline void UpperString(string * s) {
     // toupper() changes based on locale.  We don't want this!
     if ('a' <= *i && *i <= 'z') *i += 'A' - 'a';
   }
+}
+
+inline string LowerString(string s) {
+  LowerString(&s);
+  return s;
+}
+
+inline string UpperString(string s) {
+  UpperString(&s);
+  return s;
 }
 
 // Replaces all occurrences of substring in s with replacement. Returns the

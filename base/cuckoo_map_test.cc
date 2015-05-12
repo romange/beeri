@@ -7,7 +7,7 @@
 
 #include <unordered_set>
 #include <sparsehash/dense_hash_set>
-#include "base/hash.h"
+// #include "base/hash.h"
 #include "base/random.h"
 
 DEFINE_int32(shrink_items, 200, "");
@@ -16,7 +16,7 @@ namespace base {
 
 struct cityhash32 {
   size_t operator()(uint64 val) const {
-    return base::CityHash32(val);
+    return uint32(val >> 32) ^ uint32(val);
   }
 };
 
@@ -111,15 +111,30 @@ TEST_F(CuckooMapTest, Compact) {
   }
 }
 
+// Crash at Compact() if has less than 4 elements.
+TEST_F(CuckooMapTest, CompactBug) {
+  CuckooMap<int> m(2000);
+
+  m.SetEmptyKey(0);
+  m.Insert(1,1);
+  m.Insert(2,1);
+  m.Insert(3,1);
+  m.Compact(1.1);
+}
+
+
 DECLARE_BENCHMARK_FUNC(BM_InsertDenseSet, iters) {
   ::google::dense_hash_set<uint64, cityhash32> set;
   set.set_empty_key(0);
-  for (uint64 i = 0; i < iters; ++i) {
+  uint64 i = 0;
+  while (state.KeepRunning()) {
     set.insert(1 + (i + 1)*i);
+    ++i;
   }
 }
 
-DECLARE_BENCHMARK_FUNC(BM_InsertCuckoo, iters) {
+static void BM_InsertCuckoo(benchmark::State& state) {
+  unsigned iters = state.range_x();
   CuckooMapTable m(0, int(iters*1.3));
   m.SetEmptyKey(0);
   m.SetGrowth(1.5);
@@ -128,16 +143,20 @@ DECLARE_BENCHMARK_FUNC(BM_InsertCuckoo, iters) {
   }
   LOG(INFO) << "BM_InsertCuckoo: " << iters << " " << m.BytesAllocated();
 }
+BENCHMARK(BM_InsertCuckoo)->Arg(800)->Arg(1 << 16)->Arg(1<<18);
 
 DECLARE_BENCHMARK_FUNC(BM_InsertUnorderedSet, iters) {
   std::unordered_set<uint32, cityhash32> set;
-  for (int i = 0; i < iters; ++i) {
+  uint64 i = 0;
+  while (state.KeepRunning()) {
     sink_result(set.insert(i + 1));
+    ++i;
   }
 }
 
-DECLARE_BENCHMARK_FUNC(BM_FindCuckooSetSeq, iters) {
+static void BM_FindCuckooSetSeq(benchmark::State& state) {
   StopBenchmarkTiming();
+  unsigned iters = state.range_x();
   CuckooSet m(unsigned(iters*1.3));
   m.SetEmptyKey(0);
   for (int i = 0; i < iters; ++i) {
@@ -153,11 +172,13 @@ DECLARE_BENCHMARK_FUNC(BM_FindCuckooSetSeq, iters) {
     sink_result(m.find(2*iters + i + 1));
   }
 }
+BENCHMARK(BM_FindCuckooSetSeq)->Arg(800)->Arg(1 << 16)->Arg(1<<18);
 
 DECLARE_BENCHMARK_FUNC(BM_FindUnorderedSet, iters) {
   StopBenchmarkTiming();
   std::unordered_set<uint64, cityhash32> set;
-  for (int i = 0; i < iters; ++i) {
+  unsigned iters = state.range_x();
+  for (unsigned i = 0; i < iters; ++i) {
     set.insert(i + 1);
   }
   // LOG(INFO) << "Load factor " << set.load_factor();
@@ -167,9 +188,10 @@ DECLARE_BENCHMARK_FUNC(BM_FindUnorderedSet, iters) {
   }
 }
 
-DECLARE_BENCHMARK_FUNC(BM_FindDenseSetSeq, iters) {
+static void BM_FindDenseSetSeq(benchmark::State& state) {
   StopBenchmarkTiming();
   ::google::dense_hash_set<uint64, cityhash32> set;
+  unsigned iters = state.range_x();
   set.set_empty_key(0);
   for (int i = 0; i < iters; ++i) {
     set.insert(i + 1);
@@ -183,12 +205,15 @@ DECLARE_BENCHMARK_FUNC(BM_FindDenseSetSeq, iters) {
     sink_result(set.find(2*iters + i + 1));
   }
 }
+BENCHMARK(BM_FindDenseSetSeq)->Arg(800)->Arg(1 << 16)->Arg(1<<18);
 
-DECLARE_BENCHMARK_FUNC(BM_FindDenseSetRandom, iters) {
+
+static void BM_FindDenseSetRandom(benchmark::State& state) {
   StopBenchmarkTiming();
   ::google::dense_hash_set<uint64, cityhash32> set;
   set.set_empty_key(0);
   MTRandom rand(10);
+  unsigned iters = state.range_x();
   std::vector<uint64> vals(iters, 0);
   for (int i = 0; i < iters; ++i) {
     vals[i] = rand.Rand64();
@@ -202,12 +227,15 @@ DECLARE_BENCHMARK_FUNC(BM_FindDenseSetRandom, iters) {
     sink_result(set.find(iters + i + 1));
   }
 }
+BENCHMARK(BM_FindDenseSetRandom)->Arg(800)->Arg(1 << 16)->Arg(1<<18);
 
-DECLARE_BENCHMARK_FUNC(BM_FindCuckooRandom, iters) {
+static void BM_FindCuckooRandom(benchmark::State& state) {
   StopBenchmarkTiming();
+  unsigned iters = state.range_x();
   CuckooMapTable m(0, unsigned(iters*1.3));
   m.SetEmptyKey(0);
   MTRandom rand(20);
+
   std::vector<uint64> vals(iters, 0);
   for (int i = 0; i < iters; ++i) {
     vals[i] = rand.Rand64();
@@ -222,12 +250,15 @@ DECLARE_BENCHMARK_FUNC(BM_FindCuckooRandom, iters) {
     sink_result(m.find(iters + i + 1));
   }
 }
+BENCHMARK(BM_FindCuckooRandom)->Arg(800)->Arg(1 << 16)->Arg(1<<18);
 
-DECLARE_BENCHMARK_FUNC(BM_FindCuckooRandomAfterCompact, iters) {
+static void BM_FindCuckooRandomAfterCompact(benchmark::State& state) {
   StopBenchmarkTiming();
+  unsigned iters = state.range_x();
   CuckooMapTable m(0, unsigned(iters*1.3));
   m.SetEmptyKey(0);
   MTRandom rand(20);
+
   std::vector<uint64> vals(iters, 0);
   for (int i = 0; i < iters; ++i) {
     vals[i] = rand.Rand64();
@@ -241,9 +272,11 @@ DECLARE_BENCHMARK_FUNC(BM_FindCuckooRandomAfterCompact, iters) {
     sink_result(m.find(i + 1));  // to simulate misses
   }
 }
+BENCHMARK(BM_FindCuckooRandomAfterCompact)->Arg(800)->Arg(1 << 16)->Arg(1<<18);
 
-DECLARE_BENCHMARK_FUNC(BM_CuckooCompact, iters) {
+static void BM_CuckooCompact(benchmark::State& state) {
   StopBenchmarkTiming();
+  unsigned iters = state.range_x();
   CuckooMapTable m(0, unsigned(iters*1.3));
   m.SetEmptyKey(0);
   MTRandom rand(20);
@@ -258,5 +291,6 @@ DECLARE_BENCHMARK_FUNC(BM_CuckooCompact, iters) {
   CHECK(m.Compact(1.05));
   LOG(INFO) << "BM_CuckooCompact after compact: " << iters << " " << m.BytesAllocated();
 }
+BENCHMARK(BM_CuckooCompact)->Arg(800)->Arg(1 << 16)->Arg(1<<18);
 
 }  // namespace base

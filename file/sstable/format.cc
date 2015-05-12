@@ -27,10 +27,10 @@ const uint64 kTableMagicNumber = 0xf968d1dde8e3d8d6ull;
 const size_t kBlockTrailerSize = 5;
 
 bool GetVarint64(Slice* s, uint64* value) {
-  const uint8* next = Varint::Parse64WithLimit(s->begin(), s->end(), value);
+  const uint8* next = Varint::Parse64WithLimit(s->ubuf(), s->uend(), value);
   if (next == nullptr)
     return false;
-  s->set(next, s->end() - next);
+  s->remove_prefix(next - s->ubuf());
   return true;
 }
 
@@ -72,7 +72,7 @@ void Footer::EncodeTo(std::string* dst) const {
 
 Status Footer::DecodeFrom(Slice input) {
   DCHECK_EQ(kEncodedLength, input.size());
-  const uint8* magic_ptr = input.end() - coding::kFixed64Bytes;
+  const uint8* magic_ptr = input.uend() - coding::kFixed64Bytes;
   uint64 magic = 0;
   coding::DecodeFixed64(magic_ptr, &magic);
   if (magic != kTableMagicNumber) {
@@ -108,7 +108,7 @@ Status ReadBlock(ReadonlyFile* file,
   }
 
   // Check the crc of the type and the block contents
-  const uint8* data = contents.data();    // Pointer to where Read put the data
+  const uint8* data = contents.ubuf();    // Pointer to where Read put the data
   if (options.verify_checksums) {
     const uint32_t crc = util::crc32c::Unmask(coding::DecodeFixed32(data + n + 1));
     const uint32_t actual = util::crc32c::Value(data, n + 1);
@@ -127,7 +127,7 @@ Status ReadBlock(ReadonlyFile* file,
         result->heap_allocated = false;
         result->cachable = false;  // Do not double-cache
       } else {
-        result->data.set(buf.release(), n);
+        result->data.set(reinterpret_cast<char*>(buf.release()), n);
         result->heap_allocated = true;
         result->cachable = true;
       }

@@ -144,7 +144,7 @@ void TableBuilder::Add(const Slice key, const Slice value) {
     r->filter_block->AddKey(key);
   }
 
-  r->last_key.assign(key.charptr(), key.size());
+  r->last_key.assign(key.data(), key.size());
   r->num_entries++;
   r->data_block.Add(key, value);
 
@@ -195,7 +195,7 @@ void TableBuilder::WriteBlock(BlockBuilder* block, BlockHandle* handle) {
     case kSnappyCompression: {
       size_t output_length = snappy_max_compressed_length(raw.size());
       r->compressed_output.resize(output_length);
-      snappy_status st = snappy_compress(raw.charptr(), raw.size(), &r->compressed_output.front(),
+      snappy_status st = snappy_compress(raw.data(), raw.size(), &r->compressed_output.front(),
                                          &output_length);
       if (st != SNAPPY_OK) {
         LOG(ERROR) << "Error snappy compressing " << st;
@@ -226,7 +226,7 @@ void TableBuilder::WriteRawBlock(const Slice block_contents,
     return;
   uint8 trailer[kBlockTrailerSize];
   trailer[0] = type;
-  uint32_t crc = crc32c::Value(block_contents.data(), block_contents.size());
+  uint32_t crc = crc32c::Value(block_contents.ubuf(), block_contents.size());
   crc = crc32c::Extend(crc, trailer, 1);  // Extend crc to cover block type
   coding::EncodeFixed64(crc32c::Mask(crc), trailer+1);
   r->status = r->sink->Append(Slice(trailer, kBlockTrailerSize));
@@ -266,7 +266,7 @@ Status TableBuilder::Finish() {
     }
     tmp_encoding.clear();
     r->meta_block.EncodeTo(&tmp_encoding);
-    meta_index_block.Add(Slice::FromCstr(kMetaBlockKey), tmp_encoding);
+    meta_index_block.Add(StringPiece(kMetaBlockKey), tmp_encoding);
 
     // TODO(postrelease): Add stats and other meta blocks
     WriteBlock(&meta_index_block, &metaindex_block_handle);

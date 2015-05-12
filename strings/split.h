@@ -18,6 +18,8 @@
 //     Split() API.
 //
 //
+// Modified by romange@gmail.com (Roman Gershman)
+//
 #ifndef STRINGS_SPLIT_H_
 #define STRINGS_SPLIT_H_
 
@@ -687,18 +689,7 @@ void SplitStringPieceToVector(const StringPiece& full,
 // ----------------------------------------------------------------------
 void SplitStringUsing(const string& full, const char* delimiters,
                       vector<string>* result);
-/*void SplitStringToHashsetUsing(const string& full, const char* delimiters,
-                               hash_set<string>* result);
-void SplitStringToSetUsing(const string& full, const char* delimiters,
-                           std::set<string>* result);
-// The even-positioned (0-based) components become the keys for the
-// odd-positioned components that follow them. When there is an odd
-// number of components, the value for the last key will be unchanged
-// if the key was already present in the hash table, or will be the
-// empty string if the key is a newly inserted key.
-void SplitStringToHashmapUsing(const string& full, const char* delim,
-                               hash_map<string, string>* result);
-*/
+
 // ----------------------------------------------------------------------
 // SplitStringAllowEmpty()
 //
@@ -753,23 +744,6 @@ void SplitStringWithEscapingToSet(const string& full,
                                       const strings::CharSet& delimiters,
                                       hash_set<string>* result);
 */
-// ----------------------------------------------------------------------
-// SplitStringIntoNPiecesAllowEmpty()
-
-//    Split a string using a nul-terminated list of byte
-//    delimiters. Append the components to 'result'.  If there are
-//    consecutive delimiters, this function will return corresponding
-//    empty strings. The string is split into at most the specified
-//    number of pieces greedily. This means that the last piece may
-//    possibly be split further. To split into as many pieces as
-//    possible, specify 0 as the number of pieces.
-//
-//    If "full" is the empty string, yields an empty string as the only value.
-// ----------------------------------------------------------------------
-void SplitStringIntoNPiecesAllowEmpty(const string& full,
-                                      const char* delimiters,
-                                      int pieces,
-                                      vector<string>* result);
 
 // ----------------------------------------------------------------------
 // SplitStringAndParse()

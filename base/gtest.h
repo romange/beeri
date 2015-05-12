@@ -5,6 +5,7 @@
 #ifndef _BASE_GTEST_H
 #define _BASE_GTEST_H
 
+#include <benchmark/benchmark.h>
 #include <gtest/gtest.h>
 
 namespace base {
@@ -35,6 +36,16 @@ template <typename T> void sink_result(const T& t0) {
 
 }  // namespace base
 
+#ifdef BENCHMARK_WITH_ARG2
+
+#define StopBenchmarkTiming state.PauseTiming
+#define StartBenchmarkTiming state.ResumeTiming
+#define DECLARE_BENCHMARK_FUNC(name, iters)  \
+   static void name(benchmark::State& state); \
+   BENCHMARK(name); \
+   void name(benchmark::State& state)
+#else
+
 void StopBenchmarkTiming();
 
 void StartBenchmarkTiming();
@@ -46,5 +57,7 @@ void StartBenchmarkTiming();
   static void name(uint32_t); \
   BENCHMARK(name); \
   void name(uint32_t iters)
+
+#endif
 
 #endif  // _BASE_GTEST_H

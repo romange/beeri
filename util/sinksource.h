@@ -9,8 +9,8 @@
 #include <string>
 #include "base/integral_types.h"
 #include "base/macros.h"
-#include "strings/slice.h"
-#include "util/status.h"
+#include "strings/stringpiece.h"
+#include "base/status.h"
 
 // We prefer Sink and Source (like in snappy and icu) over ZeroCopy streams like in protobuf.
 // The reason for this is not convenient corner cases where you have few bytes left in the buffers
@@ -37,7 +37,7 @@ class Sink {
   virtual ~Sink() {}
 
   // Appends slice to sink.
-  virtual Status Append(strings::Slice slice) = 0;
+  virtual base::Status Append(strings::Slice slice) = 0;
 
   // Returns a writable buffer for appending .
   // Guarantees that result.capacity >=min_capacity.
@@ -62,18 +62,10 @@ class Sink {
     WritableBuffer scratch,
     size_t desired_capacity_hint = 0);
 
-  Status Append(const std::vector<uint8>& vec) {
-    return Append(strings::Slice(vec.data(), vec.size()));
-  }
-
-  Status Append(const uint8* src, size_t len) {
-    return Append(strings::Slice(src, len));
-  }
-
   // Flushes internal buffers. The default implemenation does nothing. Sink
   // subclasses may use internal buffers that require calling Flush() at the end
   // of the stream.
-  virtual Status Flush();
+  virtual base::Status Flush();
 
  private:
   DISALLOW_COPY_AND_ASSIGN(Sink);
@@ -82,9 +74,9 @@ class Sink {
 class StringSink : public Sink {
   std::string contents_;
 public:
-  Status Append(strings::Slice slice) {
-    contents_.append(slice.charptr(), slice.length());
-    return Status::OK;
+  base::Status Append(strings::Slice slice) {
+    contents_.append(slice.data(), slice.length());
+    return base::Status::OK;
   }
   std::string& contents() { return contents_; }
   const std::string& contents() const { return contents_; }
@@ -125,7 +117,7 @@ class Source {
   // REQUIRES: Peek().size() >= n
   virtual void Skip(size_t n) = 0;
 
-  virtual util::Status status() const = 0;
+  virtual base::Status status() const = 0;
  private:
   DISALLOW_COPY_AND_ASSIGN(Source);
 };
@@ -142,7 +134,7 @@ public:
 
   void Skip(size_t n) { input_.remove_prefix(n); }
   strings::Slice Peek(uint32 = 0) { return strings::Slice(input_, 0, block_size_); }
-  virtual Status status() const { return Status::OK; }
+  virtual base::Status status() const { return base::Status::OK; }
 private:
   strings::Slice input_;
   uint32 block_size_ = kuint32max;
@@ -163,7 +155,7 @@ public:
 
   void Skip(size_t n);
   strings::Slice Peek(uint32 minimal_size = 0);
-  util::Status status() const { return status_; }
+  base::Status status() const { return status_; }
 
 private:
   void Refill(uint32 minimal_size);
@@ -194,7 +186,7 @@ protected:
   // Control the peek and refill buffers.
   uint32 avail_peek_ = 0;
   bool eof_ = false;
-  util::Status status_;
+  base::Status status_;
 
   DISALLOW_COPY_AND_ASSIGN(BufferredSource);
 };

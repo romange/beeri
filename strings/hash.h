@@ -6,22 +6,21 @@
 
 #include <functional>
 #include "base/hash.h"
-#include "strings/slice.h"
 #include "strings/stringpiece.h"
 
 namespace std {
 
 template<> struct hash<strings::Slice> {
   size_t operator()(strings::Slice slice) const {
-    return base::MurmurHash3_x86_32(slice.data(), slice.size(), 16785407UL);
+    return base::MurmurHash3_x86_32(slice.ubuf(), slice.size(), 16785407UL);
   }
 };
 
-template<> struct hash<StringPiece> {
+/*template<> struct hash<StringPiece> {
   size_t operator()(StringPiece sp) const {
     return hash<strings::Slice>()(sp.as_slice());
   }
-};
+};*/
 
 }  // namespace std
 

@@ -24,7 +24,7 @@ void MetaMapBlock::EncodeTo(std::string* dest) const {
 }
 
 base::Status MetaMapBlock::DecodeFrom(strings::Slice input) {
-  const uint8* ptr = input.begin(), *limit = input.end();
+  const uint8* ptr = input.ubuf(), *limit = input.ubuf() + input.size();
   uint32 sz = 0;
   if ((ptr = Varint::Parse32WithLimit(ptr, limit, &sz)) == nullptr) {
     return Status(StatusCode::IO_ERROR);

@@ -8,7 +8,7 @@
 #include <vector>
 
 #include <cstdint>
-#include "strings/slice.h"
+#include "strings/stringpiece.h"
 
 namespace file {
 namespace sstable {

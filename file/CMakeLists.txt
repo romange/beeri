@@ -1,6 +1,6 @@
 add_library(file file.cc file_util.cc filesource.cc list_file.cc list_file_reader.cc
-                 meta_map_block.cc s3_file.cc)
-cxx_link(file base coding snappy strings util s3)
+                 meta_map_block.cc)
+cxx_link(file base coding snappy strings util)
 cxx_test(file_test file)
 
 add_library(test_util test_util.cc)

@@ -31,8 +31,6 @@
 
 #include <sys/time.h>
 
-#include "base/port.h"
-
 // Please do not nest #if directives.  Keep one section, and one #if per
 // platform.
 
@@ -42,102 +40,16 @@
 
 // ----------------------------------------------------------------
 #if defined(__APPLE__)
-#include <mach/mach_time.h>
-inline uint64 CycleClock::Now() {
-  // this goes at the top because we need ALL Macs, regardless of
-  // architecture, to return the number of "mach time units" that
-  // have passed since startup.  See sysinfo.cc where
-  // InitializeSystemInfo() sets the supposed cpu clock frequency of
-  // macs to the number of mach time units per second, not actual
-  // CPU clock frequency (which can change in the face of CPU
-  // frequency scaling).  Also note that when the Mac sleeps, this
-  // counter pauses; it does not continue counting, nor does it
-  // reset to zero.
-  return mach_absolute_time();
-}
-
+#error do not support
 // ----------------------------------------------------------------
 #elif defined(__i386__)
-inline uint64 CycleClock::Now() {
-  uint64 ret;
-  __asm__ volatile("rdtsc" : "=A" (ret));
-  return ret;
-}
-
+#error do not support
 // ----------------------------------------------------------------
 #elif defined(__x86_64__) || defined(__amd64__)
 inline uint64 CycleClock::Now() {
   uint64 low, high;
   __asm__ volatile("rdtsc" : "=a" (low), "=d" (high));
   return (high << 32) | low;
-}
-
-// ----------------------------------------------------------------
-#elif defined(__powerpc__) || defined(__ppc__)
-#define SPR_TB 268
-#define SPR_TBU 269
-inline uint64 CycleClock::Now() {
-  uint64 time_base_value;
-  if (sizeof(void*) == 8) {
-    // On PowerPC64, time base can be read with one SPR read.
-    asm volatile("mfspr %0, %1" : "=r" (time_base_value) : "i"(SPR_TB));
-  } else {
-    uint32 tbl, tbu0, tbu1;
-    asm volatile (" mfspr %0, %3\n"
-                  " mfspr %1, %4\n"
-                  " mfspr %2, %3\n" :
-                  "=r"(tbu0), "=r"(tbl), "=r"(tbu1) :
-                  "i"(SPR_TBU), "i"(SPR_TB));
-    // If there is a carry into the upper half, it is okay to return
-    // (tbu1, 0) since it must be between the 2 TBU reads.
-    tbl &= -static_cast<uint32>(tbu0 == tbu1);
-    // high 32 bits in tbu1; low 32 bits in tbl  (tbu0 is garbage)
-    time_base_value =
-        (static_cast<uint64>(tbu1) << 32) | static_cast<uint64>(tbl);
-  }
-  return time_base_value;
-}
-
-// ----------------------------------------------------------------
-#elif defined(__sparc__)
-inline uint64 CycleClock::Now() {
-  int64 tick;
-  asm(".byte 0x83, 0x41, 0x00, 0x00");
-  asm("mov   %%g1, %0" : "=r" (tick));
-  return tick;
-}
-
-// ----------------------------------------------------------------
-#elif defined(__ia64__)
-inline uint64 CycleClock::Now() {
-  uint64 itc;
-  asm("mov %0 = ar.itc" : "=r" (itc));
-  return itc;
-}
-
-// ----------------------------------------------------------------
-#elif defined(_MSC_VER) && defined(_M_IX86)
-inline uint64 CycleClock::Now() {
-  // Older MSVC compilers (like 7.x) don't seem to support the
-  // __rdtsc intrinsic properly, so I prefer to use _asm instead
-  // when I know it will work.  Otherwise, I'll use __rdtsc and hope
-  // the code is being compiled with a non-ancient compiler.
-  _asm rdtsc
-}
-
-// ----------------------------------------------------------------
-#elif defined(_MSC_VER)
-// For MSVC, we want to use '_asm rdtsc' when possible (since it works
-// with even ancient MSVC compilers), and when not possible the
-// __rdtsc intrinsic, declared in <intrin.h>.  Unfortunately, in some
-// environments, <windows.h> and <intrin.h> have conflicting
-// declarations of some other intrinsics, breaking compilation.
-// Therefore, we simply declare __rdtsc ourselves. See also
-// http://connect.microsoft.com/VisualStudio/feedback/details/262047
-extern "C" uint64 __rdtsc();
-#pragma intrinsic(__rdtsc)
-inline uint64 CycleClock::Now() {
-  return __rdtsc();
 }
 
 // ----------------------------------------------------------------

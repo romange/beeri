@@ -23,10 +23,9 @@ namespace base {
 
 class RefCountBase {
 public:
-  void AddRef() { count_.fetch_add(1);}
+  void AddRef() { count_.fetch_add(1, std::memory_order_release);}
 protected:
   RefCountBase() : count_(1) {}
-  ~RefCountBase() {}
 
   std::atomic_uint count_;
 };
@@ -35,7 +34,7 @@ template<typename T> class RefCount : public RefCountBase {
 public:
   // Returns true if object was deleted.
   bool DecRef() {
-    if (count_.fetch_sub(1) == 1) {
+    if (count_.fetch_sub(1, std::memory_order_acquire) == 1) {
       delete static_cast<T*>(this);
       return true;
     }

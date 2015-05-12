@@ -507,16 +507,6 @@ string FpToString(Fprint fp) {
   return string(buf);
 }
 
-// Default arguments
-string Uint128ToHexString(uint128 ui128) {
-  char buf[33];
-  snprintf(buf, sizeof(buf), "%016" PRIu64 "x",
-           Uint128High64(ui128));
-  snprintf(buf + 16, sizeof(buf) - 16, "%016" PRIu64 "x",
-           Uint128Low64(ui128));
-  return string(buf);
-}
-
 namespace {
 
 // Represents integer values of digits.

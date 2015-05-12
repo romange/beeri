@@ -31,7 +31,7 @@ bool BzipSource::RefillInternal() {
     strings::Slice input_buf = sub_stream_->Peek(buf_size_ / 16);
     if (input_buf.empty()) return true;
 
-    rep_->stream.next_in = const_cast<char*>(input_buf.charptr());
+    rep_->stream.next_in = const_cast<char*>(input_buf.data());
     rep_->stream.avail_in = input_buf.size();
     rep_->stream.next_out = reinterpret_cast<char*>(peek_pos_) + avail_peek_;
     rep_->stream.avail_out = available_to_refill();

@@ -15,7 +15,7 @@ namespace file {
 using namespace list_file;
 
 using strings::Slice;
-using util::Status;
+using base::Status;
 
 
 namespace crc32c = util::crc32c;
@@ -179,7 +179,7 @@ protected:
   void FixChecksum(int header_offset, int len) {
     // Compute crc of type/data
     Slice s(dest_->contents(), header_offset + list_offset_);
-    uint32_t crc = crc32c::Value(s.data() + 8, 1 + len);
+    uint32_t crc = crc32c::Value(s.ubuf() + 8, 1 + len);
     crc = crc32c::Mask(crc);
     coding::EncodeFixed32(crc, reinterpret_cast<uint8*>(
       &dest_->contents()[header_offset + list_offset_]));
@@ -506,6 +506,25 @@ TEST_F(LogTest, MetaData) {
   EXPECT_EQ(2, meta.size());
   EXPECT_EQ(kMetaVal1, meta["key1"]);
   EXPECT_EQ(kMetaVal2, meta["key2"]);
+}
+
+TEST_F(LogTest, EmptyFile) {
+  dest_->contents() = "garbag";
+  ASSERT_EQ("EOF", Read());
+  EXPECT_EQ("OK", MatchError("IO_ERROR"));
+}
+
+TEST_F(LogTest, Reset) {
+  Write("foo");
+  Write("bar");
+
+  ASSERT_EQ("foo", Read());
+  ASSERT_EQ("bar", Read());
+  ASSERT_EQ("EOF", Read());
+  reader_->Reset();
+  ASSERT_EQ("foo", Read());
+  ASSERT_EQ("bar", Read());
+  ASSERT_EQ("EOF", Read());
 }
 
 /*TEST_F(LogTest, ReadStart) {

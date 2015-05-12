@@ -20,6 +20,7 @@ namespace sstable {
 using strings::Slice;
 using base::Status;
 using base::StatusCode;
+using std::string;
 
 struct Table::Rep {
   ~Rep() {
@@ -97,7 +98,7 @@ void Table::ReadMeta(const Footer& footer) {
       ReadFilter(iter->value());
     }
   }
-  Slice meta_map_key = Slice::FromCstr(kMetaBlockKey);
+  Slice meta_map_key(kMetaBlockKey);
   iter->Seek(meta_map_key);
   if (iter->Valid() && iter->key() == meta_map_key) {
     auto st = rep_->meta_map_block.DecodeFrom(iter->value());
@@ -123,7 +124,7 @@ void Table::ReadFilter(const Slice& filter_handle_value) {
     return;
   }
   if (block.heap_allocated) {
-    rep_->filter_data.reset(const_cast<uint8*>(block.data.data()));     // Will need to delete later
+    rep_->filter_data.reset(const_cast<uint8*>(block.data.ubuf()));     // Will need to delete later
   }
   rep_->filter = new FilterBlockReader(rep_->options.filter_policy, block.data);
 }

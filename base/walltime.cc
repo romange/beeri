@@ -243,3 +243,24 @@ uint64 CycleClock::CycleFreq() {
   sched_setaffinity(0, sizeof(old_mask), &old_mask);
   return freq;
 }
+
+namespace base {
+
+int TimezoneDiff(const char* tm_zone) {
+  time_t now_utc = time(nullptr);
+  struct tm tm_utc;
+  char *tz = getenv("TZ");
+  setenv("TZ", tm_zone, 1);
+  tzset();
+  gmtime_r(&now_utc, &tm_utc);
+  tm_utc.tm_isdst = -1;  // Ask for help for DST.
+  time_t there = mktime(&tm_utc);
+  if (tz)
+    setenv("TZ", tz, 1);
+  else
+    unsetenv("TZ");
+  tzset();
+  return (now_utc - there) / 3600;
+}
+
+}  // namespace base

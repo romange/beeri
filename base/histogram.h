@@ -18,7 +18,8 @@ class Histogram {
   ~Histogram();
 
   void Clear();
-  void Add(double value);
+  void Add(double value) { Add(value, 1);}
+  void Add(double value, uint32 count);
   void Merge(const Histogram& other);
 
   std::string ToString() const;

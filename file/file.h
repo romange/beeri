@@ -35,10 +35,17 @@ class ReadonlyFile {
 protected:
   ReadonlyFile() {}
 public:
+
+  struct Options {
+    bool use_mmap;
+    Options() : use_mmap(true) {}
+  };
+
   virtual ~ReadonlyFile();
 
   // Reads upto length bytes and updates the result to point to the data.
-  // May use buffer for storing data.
+  // May use buffer for storing data. In case, EOF reached sets result.size() < length but still
+  // returns Status::OK.
   virtual base::Status Read(size_t offset, size_t length, strings::Slice* result,
                             uint8* buffer) = 0;
 
@@ -50,7 +57,7 @@ public:
 
   // Factory function that creates the ReadonlyFile object.
   // The ownership is passed to the caller.
-  static base::StatusObject<ReadonlyFile*> Open(StringPiece name);
+  static base::StatusObject<ReadonlyFile*> Open(StringPiece name, const Options& opts = Options());
 };
 
 // Wrapper class for system functions which handle basic file operations.
@@ -65,28 +72,14 @@ class File {
   // Open a file that has already been created. Should not be called directly.
   virtual bool Open() = 0;
 
-  // Reads data and returns it in OUTPUT. Set total count of bytes read  into read_size.
-  // Returns util::TStatusCode::END_OF_STREAM if eof reached.
-  virtual base::Status Read(size_t length, uint8* OUTPUT, size_t* read_size) = 0;
-
-  // Reads one line, or max_length characters if the line is longer, into
-  // the buffer.
-  // virtual char* ReadLine(char* buffer, uint64 max_length) = 0;
-
   // Try to write 'length' bytes from 'buffer', returning
   // the number of bytes that were actually written.
   // Return <= 0 on error.
   virtual base::Status Write(const uint8* buffer, uint64 length, uint64* bytes_written) = 0;
 
   base::Status Write(strings::Slice slice, uint64* bytes_written) {
-    return Write(slice.data(), slice.size(), bytes_written);
+    return Write(slice.ubuf(), slice.size(), bytes_written);
   }
-
-  // Traditional seek + read/write interface.
-  // We do not support seeking beyond the end of the file and writing to
-  // extend the file. Use Append() to extend the file.
-  // whence can be either SEEK_SET, SEEK_CUR, SEEK_END.
-  virtual base::Status Seek(int64 position, int whence) = 0;
 
   virtual base::Status Flush() = 0;
 
@@ -94,7 +87,7 @@ class File {
   virtual bool eof() = 0;
 
   // Returns the file name given during Create(...) call.
-  const string& create_file_name() const { return create_file_name_; }
+  const std::string& create_file_name() const { return create_file_name_; }
 
  protected:
   explicit File(const StringPiece create_file_name);
@@ -150,8 +143,6 @@ class FileCloser {
   File* fp_;
   FileCloser(const FileCloser&) = delete;
 };
-
-bool IsInS3Namespace(StringPiece name);
 
 } // namespace file
 

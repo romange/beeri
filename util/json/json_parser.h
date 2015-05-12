@@ -27,6 +27,7 @@ public:
     STRING,
     DOUBLE,
     INTEGER,
+    UINT,
     PRIMITIVE,
   };
 
@@ -36,6 +37,7 @@ public:
     union U {
       StringPiece token;
       int64 int_val;
+      uint64 uint_val;
 
       struct {
         // for an array and object int_val describes number of transitive subnodes in those types.
@@ -55,7 +57,7 @@ public:
     Type type = UNDEFINED;
 
     Value() {}
-    Value(Type t) : type(t) {}
+    explicit Value(Type t) : type(t) {}
 
     bool is_composite() const { return type == OBJECT || type == ARRAY; }
 
@@ -91,7 +93,6 @@ public:
     bool Done() const { return slice_.empty(); }
   };
 
-  class ObjectIterator;
   class ArrayIterator;
 
   JsonObject() {}
@@ -102,8 +103,7 @@ public:
   JsonObject get(StringPiece key) const;
 
   // When this->is_defined() is false, both methods return valid iterators with Done() = true.
-  // ObjectIterator is deprecated.
-  ObjectIterator GetObjectIterator() const  __attribute__ ((deprecated));
+
   ArrayIterator GetArrayIterator() const;
 
   bool is_defined() const { return !slice_.empty(); }
@@ -116,13 +116,19 @@ public:
 
   bool IsNumber() const {
     Type t = type();
-    return t == DOUBLE || t == INTEGER;
+    return t == DOUBLE || t == INTEGER || t == UINT;
+  }
+
+  bool IsString() const {
+    return type() == STRING;
   }
 
   StringPiece GetStr() const;
+  StringPiece GetStringPiece() const { return GetStr(); }
   std::string GetString() const { return GetStr().as_string(); }
 
   int64 GetInt() const;
+  uint64 GetUInt() const;
 
   bool GetBool() const;
 
@@ -130,7 +136,7 @@ public:
 
   uint32 Size() const;
 
-  string ToString() const;
+  std::string ToString() const;
 
   // For objects that a value parts in JSON object struct, returns their corresponding name.
   // For example, with "{ foo : 2 }". For JSON integer object "2", its name will be "foo".
@@ -147,26 +153,7 @@ private:
   ValueSlice slice_; // slice to elements in JsonParser.values_
   StringPiece name_; // the name of the object if exists.
   bool check_fail_on_schema_errors_ = false;
-};
-
-
-class JsonObject::ObjectIterator : public Iterator {
-  friend class JsonObject;
-  mutable std::pair<StringPiece, JsonObject> res_;
-protected:
-  ObjectIterator(ValueSlice slice, bool check_fail_on_schema_errors)
-      : Iterator(slice, check_fail_on_schema_errors) {}
-
-public:
-  ObjectIterator() {}
-  std::pair<StringPiece, JsonObject> GetKeyVal() const;
-
-  const std::pair<StringPiece, JsonObject>* operator->() const {
-    res_ = GetKeyVal();
-    return &res_;
-  }
-
-  ObjectIterator& operator++();  // prefix
+  mutable std::string tmp_;
 };
 
 class JsonObject::ArrayIterator : public Iterator {
@@ -239,20 +226,6 @@ inline void JsonObject::Iterator::AdvanceImmediate() {
   slice_.remove_prefix(prefix_sz);
 }
 
-inline std::pair<StringPiece, JsonObject>
-    JsonObject::ObjectIterator::GetKeyVal() const {
-  DCHECK(slice_.size() > 1 && slice_[0].type == KEY_NAME);
-  DCHECK(slice_[1].type != KEY_NAME);
-  StringPiece name = slice_[0].u.token;
-  return std::make_pair(name, JsonObject(slice_.data() + 1, check_fail_on_schema_errors_, name));
-}
-
-inline JsonObject::ObjectIterator& JsonObject::ObjectIterator::operator++() {
-  DCHECK(slice_.size() > 1 && slice_[0].type == KEY_NAME);
-  AdvanceImmediate();
-  AdvanceImmediate();
-  return *this;
-};
 
 inline JsonObject JsonObject::ArrayIterator::GetObj() const {
   if (slice_.empty()) {

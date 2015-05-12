@@ -7,7 +7,7 @@
 #include <map>
 #include <string>
 #include "base/status.h"
-#include "strings/slice.h"
+#include "strings/stringpiece.h"
 
 namespace file {
 
@@ -24,7 +24,7 @@ public:
   // Encodes the MetaMapBlock and appends its serialized contents to dest.
   void EncodeTo(std::string* dest) const;
 
-  base::Status DecodeFrom(strings::Slice input);
+  base::Status DecodeFrom(StringPiece input);
 
   bool empty() const { return meta_.empty(); }
 };

@@ -97,12 +97,12 @@ void BlockBuilder::Add(const Slice& key, const Slice& value) {
   Varint::Append32(&buffer_, value.size());
 
   // Add string delta to buffer_ followed by value
-  buffer_.append(key.charptr() + shared, non_shared);
-  buffer_.append(value.charptr(), value.size());
+  buffer_.append(key.data() + shared, non_shared);
+  buffer_.append(value.data(), value.size());
 
   // Update state
   last_key_.resize(shared);
-  last_key_.append(key.charptr() + shared, non_shared);
+  last_key_.append(key.data() + shared, non_shared);
   DCHECK(Slice(last_key_) == key);
   counter_++;
 }

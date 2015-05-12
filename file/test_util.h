@@ -13,6 +13,8 @@ std::string TestTempDir();
 
 namespace file {
 
+using std::string;
+
 class NullFile : public File {
  public:
   NullFile() : File("NullFile") {}
@@ -22,7 +24,7 @@ class NullFile : public File {
     return base::Status::OK;
   }
   base::Status Write(const uint8* ,uint64,  uint64* ) override { return base::Status::OK; }
-  base::Status Seek(int64 , int ) override { return base::Status::OK; }
+
   bool eof() override  {return true;}
   base::Status Flush() override {return base::Status::OK; }
 };

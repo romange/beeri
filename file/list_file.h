@@ -32,9 +32,9 @@ class ListWriter {
   // Adds user provided meta information about the file. Must be called before Init.
   void AddMeta(StringPiece key, strings::Slice value);
 
-  util::Status Init();
-  util::Status AddRecord(strings::Slice slice);
-  util::Status Flush();
+  base::Status Init();
+  base::Status AddRecord(strings::Slice slice);
+  base::Status Flush();
 
   uint32 records_added() const { return records_added_;}
   uint64 bytes_added() const { return bytes_added_;}
@@ -60,13 +60,13 @@ class ListWriter {
 
   void Construct();
 
-  util::Status EmitPhysicalRecord(list_file::RecordType type, const uint8* ptr,
+  base::Status EmitPhysicalRecord(list_file::RecordType type, const uint8* ptr,
                                   size_t length);
 
   uint32 block_leftover() const { return block_leftover_; }
 
   void AddRecordToArray(strings::Slice size_enc, strings::Slice record);
-  util::Status FlushArray();
+  base::Status FlushArray();
 
   // No copying allowed
   ListWriter(const ListWriter&) = delete;
@@ -88,7 +88,7 @@ class ListReader {
   // relative to start of list records. In afact all positions mentioned in the API are
   // relative to list start position in the file (i.e. file header is read internally and its size
   // is not relevant for the API).
-  typedef std::function<void(size_t bytes, const util::Status& status)> CorruptionReporter;
+  typedef std::function<void(size_t bytes, const base::Status& status)> CorruptionReporter;
 
   // initial_offset - file offset AFTER the file header, i.e. offset 0 does not skip anything.
   // File header is read in any case.
@@ -117,6 +117,10 @@ class ListReader {
   // Undefined before the first call to ReadRecord.
   //size_t LastRecordOffset() const { return last_record_offset_; }
 
+  void Reset() {
+    block_size_ = file_offset_ = array_records_ = 0;
+    eof_ = false;
+  }
 private:
   bool ReadHeader();
 
@@ -157,22 +161,22 @@ private:
   };
 
   // Skips all blocks that are completely before "initial_offset_".
-  // util::Status SkipToInitialBlock();
+  // base::Status SkipToInitialBlock();
 
   // Return type, or one of the preceding special values
   unsigned int ReadPhysicalRecord(strings::Slice* result);
 
   // Reports dropped bytes to the reporter.
   // buffer_ must be updated to remove the dropped bytes prior to invocation.
-  void ReportCorruption(size_t bytes, const string& reason);
-  void ReportDrop(size_t bytes, const util::Status& reason);
+  void ReportCorruption(size_t bytes, const std::string& reason);
+  void ReportDrop(size_t bytes, const base::Status& reason);
 
   // No copying allowed
   ListReader(const ListReader&) = delete;
   void operator=(const ListReader&) = delete;
 };
 
-template<typename T> void ReadProtoRecords(file::File* file,
+template<typename T> void ReadProtoRecords(file::ReadonlyFile* file,
                                            std::function<void(T&&)> cb) {
   file::ListReader reader(file, TAKE_OWNERSHIP);
   std::string record_buf;
@@ -194,6 +198,28 @@ template<typename T> void ReadProtoRecords(StringPiece name,
     CHECK(item.ParseFromArray(record.data(), record.size()));
     cb(std::move(item));
   }
+}
+
+template<typename T> base::Status SafeReadProtoRecords(StringPiece name,
+                                                      std::function<void(T&&)> cb) {
+  auto res = file::ReadonlyFile::Open(name);
+  if (!res.ok()) {
+    return res.status;
+  }
+  CHECK(res.obj);   // Fatal error. If status ok, must contains file pointer.
+
+  file::ListReader reader(res.obj, TAKE_OWNERSHIP);
+  std::string record_buf;
+  strings::Slice record;
+  while (reader.ReadRecord(&record, &record_buf)) {
+    T item;
+    if (!item.ParseFromArray(record.data(), record.size())) {
+      return base::Status("Invalid record");
+    }
+    cb(std::move(item));
+  }
+
+  return base::Status::OK;
 }
 
 }  // namespace file

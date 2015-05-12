@@ -60,19 +60,19 @@ void Histogram::Clear() {
   buckets_.clear();
 }
 
-void Histogram::Add(double value) {
+void Histogram::Add(double value, uint32 count) {
   auto it = std::upper_bound(kBucketLimit, kBucketLimit + kNumBuckets - 1, value);
   std::size_t b = it - kBucketLimit;
   if (buckets_.size() <= b) {
     buckets_.resize(1 << (Bits::FindMSBSetNonZero(b) + 1));
   }
 
-  buckets_[b] += 1;
+  buckets_[b] += count;
   if (min_ > value) min_ = value;
   if (max_ < value) max_ = value;
-  num_++;
-  sum_ += value;
-  sum_squares_ += (value * value);
+  num_ += count;
+  sum_ += value * count;
+  sum_squares_ += (value * value) * count;
 }
 
 void Histogram::Merge(const Histogram& other) {

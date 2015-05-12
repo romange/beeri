@@ -86,8 +86,14 @@ class CycleClock {
 
   static uint64 toUsec(uint64 cycles) { return cycles*1000/(CycleFreq() / 1000);}
   static uint64 toMsec(uint64 cycles) { return cycles/(CycleFreq() / 1000);}
+  CycleClock() { Reset(); }
+
+  uint64 Usec() const { return toUsec(Now() - start_); }
+  uint64 Msec() const { return toMsec(Now() - start_); }
+
+  void Reset() { start_ = Now(); }
  private:
-  CycleClock();
+  uint64 start_;
 };
 
 std::string PrintLocalTime(uint64 seconds_epoch, const char* format);
@@ -125,6 +131,12 @@ public:
 
   uint64 EvalUsec() const { return Usec() - start_usec_; }
 };
+
+
+// Returns current difference in hours between UTC and the time zone.
+// For example, TimezoneDiff("EST") should return -5.
+//
+int TimezoneDiff(const char* tm_zone);
 
 }  // namespace base
 

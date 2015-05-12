@@ -4,8 +4,10 @@
 
 #include "util/sinksource.h"
 #include "base/logging.h"
+#include "base/port.h"
 
 using strings::Slice;
+using base::Status;
 
 namespace util {
 
@@ -59,7 +61,7 @@ void BufferredSource::Refill(uint32 minimal_size) {
     // Move [peek_pos_, peek_pos_ + avail_peek_] to
     // [start, start + avail_peek_]
     // if they overlap, then minimal_size is probably too large.
-    if (GOOGLE_PREDICT_FALSE(avail_peek_ > offset)) {
+    if (PREDICT_FALSE(avail_peek_ > offset)) {
       LOG(DFATAL) << "minimal_size is too large: " << minimal_size;
       memmove(start, peek_pos_, avail_peek_);
     } else {

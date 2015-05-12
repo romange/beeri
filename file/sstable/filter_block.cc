@@ -35,7 +35,7 @@ void FilterBlockBuilder::StartBlock(uint64_t block_offset) {
 void FilterBlockBuilder::AddKey(const Slice key) {
   Slice k = key;
   start_.push_back(keys_.size());
-  keys_.append(k.charptr(), k.size());
+  keys_.append(k.data(), k.size());
 }
 
 Slice FilterBlockBuilder::Finish() {
@@ -90,9 +90,9 @@ FilterBlockReader::FilterBlockReader(const FilterPolicy* policy,
   size_t n = contents.size();
   if (n < 5) return;  // 1 byte for base_lg_ and 4 for start of offset array
   base_lg_ = contents[n-1];
-  uint32_t last_word = coding::DecodeFixed32(contents.data() + n - 5);
+  uint32_t last_word = coding::DecodeFixed32(contents.ubuf() + n - 5);
   if (last_word > n - 5) return;
-  data_ = contents.data();
+  data_ = contents.ubuf();
   offset_ = data_ + last_word;
   num_ = (n - 5 - last_word) / 4;
 }

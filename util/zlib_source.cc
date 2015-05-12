@@ -10,8 +10,8 @@
 namespace util {
 
 bool ZlibSource::IsZlibSource(Source* source) {
-  strings::Slice header(source->Peek(2));
-  return header.size() >= 2 && (header[0] == 0x1f) && (header[1] == 0x8b);
+  StringPiece header = source->Peek(2);
+  return header.size() >= 2 && header[0] == char(0x1f) && header[1] == char(0x8b);
 }
 
 ZlibSource::ZlibSource(
@@ -57,7 +57,7 @@ bool ZlibSource::RefillInternal() {
       if (input_buf_.empty()) {
         return true;
       }
-      zcontext_.next_in = const_cast<uint8*>(input_buf_.data());
+      zcontext_.next_in = const_cast<uint8*>(input_buf_.ubuf());
       zcontext_.avail_in = input_buf_.size();
       if (first) {
         zerror_ = internalInflateInit2(format_, &zcontext_);

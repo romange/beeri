@@ -69,9 +69,10 @@ void Status::GetErrorMsg(string* msg) const {
   }
 }
 
-}  // namespace util
-
 std::ostream& operator<<(std::ostream& o, const base::Status& status) {
   o << status.ToString();
   return o;
 }
+
+}  // namespace base
+

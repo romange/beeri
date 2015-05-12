@@ -167,7 +167,7 @@ bool TwoLevelIterator::InitDataBlock() {
     // no need to change anything
   } else {
     Iterator* iter = (*block_function_)(arg_, handle);
-    data_block_handle_.assign(handle.charptr(), handle.size());
+    data_block_handle_.assign(handle.data(), handle.size());
     SetDataIterator(iter);
     VLOG(1) << "Created new data iterator";
   }

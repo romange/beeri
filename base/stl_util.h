@@ -27,11 +27,12 @@
 #include <string.h>  // for memcpy
 #include <algorithm>
 using std::copy;
-using std::reverse;
 using std::sort;
 using std::swap;
 #include <cassert>
 #include <deque>
+#include <sparsehash/dense_hash_map>
+
 using std::deque;
 #include <functional>
 using std::binary_function;
@@ -827,5 +828,23 @@ template<typename T> std::ostream& operator<<(std::ostream& o, const vector<T>& 
   o << "]";
   return o;
 }
+
+template<typename T, typename U> std::ostream& operator<<(std::ostream& o,
+  const ::google::dense_hash_map<T,U>& vec) {
+  o << "[";
+  for (const auto& k_v : vec) {
+    o << "(" << k_v.first << "," << k_v.second << "),";
+  }
+  o << "]";
+  return o;
+}
+
+namespace base {
+
+template<typename T> bool _in(T t, std::initializer_list<T> l) {
+  return std::find(l.begin(), l.end(), t) != l.end();
+}
+
+}  // namespace base
 
 #endif  // UTIL_GTL_STL_UTIL_H_

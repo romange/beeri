@@ -20,7 +20,7 @@ const char kMagicString[] = "LST1";
 
 }  // namespace list_file
 
-using util::Status;
+using base::Status;
 using strings::Slice;
 using namespace ::util;
 using base::StatusCode;
@@ -33,8 +33,7 @@ class Varint32Encoder {
   uint8 buf_[Varint::kMax32];
   uint8 sz_ = 0;
 public:
-  Varint32Encoder() : buf_{{0}} {}
-  Varint32Encoder(uint32 val) {
+  Varint32Encoder(uint32 val = 0) {
     encode(val);
   }
 
@@ -81,7 +80,7 @@ void ListWriter::AddMeta(StringPiece key, strings::Slice value) {
   meta_[key.as_string()] = value.as_string();
 }
 
-util::Status ListWriter::Init() {
+Status ListWriter::Init() {
   CHECK_GT(options_.block_size_multiplier, 0);
   CHECK(!init_called_);
   RETURN_IF_ERROR(dest_->Append(StringPiece(kMagicString, kMagicStringSize).as_slice()));
@@ -177,7 +176,7 @@ Status ListWriter::AddRecord(strings::Slice record) {
         fragment_length = block_leftover() - kBlockHeaderSize;
         type = kMiddleType;
       }
-      RETURN_IF_ERROR(EmitPhysicalRecord(type, record.data(), fragment_length));
+      RETURN_IF_ERROR(EmitPhysicalRecord(type, record.ubuf(), fragment_length));
       if (type == kLastType)
         return Status::OK;
       record.remove_prefix(fragment_length);
@@ -193,12 +192,12 @@ Status ListWriter::AddRecord(strings::Slice record) {
     }
     if (kBlockHeaderSize + record.size() <= block_leftover()) {
       // We have space for exactly one record in this block.
-      return EmitPhysicalRecord(kFullType, record.data(), record.size());
+      return EmitPhysicalRecord(kFullType, record.ubuf(), record.size());
     }
     // We must fragment.
     fragmenting = true;
     const size_t fragment_length = block_leftover() - kBlockHeaderSize;
-    RETURN_IF_ERROR(EmitPhysicalRecord(kFirstType, record.data(), fragment_length));
+    RETURN_IF_ERROR(EmitPhysicalRecord(kFirstType, record.ubuf(), fragment_length));
     record.remove_prefix(fragment_length);
   };
   return Status(StatusCode::INTERNAL_ERROR, "Should not reach here");

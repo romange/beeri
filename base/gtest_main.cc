@@ -4,26 +4,31 @@
 #include <cstdio>
 #include <iomanip>
 #include <gtest/gtest.h>
+#include <benchmark/benchmark.h>
+
 #include "base/googleinit.h"
 #include "base/gtest.h"
 #include <sys/time.h>
 
-DEFINE_int32(benchmark_max_iters, 10000000, "Maximum test iterations");
-DEFINE_int32(benchmark_min_iters, 100, "Minimum test iterations");
-DEFINE_int32(benchmark_target_seconds, 3,
-             "Attempt to benchmark for this many seconds");
-DEFINE_string(benchmark_filter, "", "substring filter for the benchmarks");
+//DEFINE_int32(benchmark_max_iters, 10000000, "Maximum test iterations");
+//DEFINE_int32(benchmark_min_iters, 100, "Minimum test iterations");
+//DEFINE_int32(benchmark_target_seconds, 3,
+             //"Attempt to benchmark for this many seconds");
+// DEFINE_string(benchmark_filter, "", "substring filter for the benchmarks");
 DEFINE_bool(bench, false, "Run benchmarks");
 
 namespace base {
-static BenchmarkRun *first_benchmark = nullptr;
-static BenchmarkRun *current_benchmark_ = nullptr;
+//static BenchmarkRun *first_benchmark = nullptr;
+//static BenchmarkRun *current_benchmark_ = nullptr;
 
-int64_t get_micros () {
-  timeval tv;
-  gettimeofday(&tv, NULL);
-  return tv.tv_sec * 1000000 + tv.tv_usec;
+#if 0
+int64_t get_micros() {
+  timespec ts;
+  clock_gettime(CLOCK_MONOTONIC, &ts);
+
+  return ts.tv_sec * 1000000L + (ts.tv_nsec / 1000);
 }
+
 
 BenchmarkRun::BenchmarkRun(const char *name, void (*func)(uint32_t))
   : next_benchmark_(first_benchmark),
@@ -79,6 +84,7 @@ void BenchmarkRun::Run(unsigned padding_name) {
   current_benchmark_ = NULL;
 }
 
+
 void BenchmarkRun::RunAllBenchmarks() {
   if (!first_benchmark) return;
   size_t name_size = 0;
@@ -95,8 +101,10 @@ void BenchmarkRun::RunAllBenchmarks() {
   }
 }
 
+#endif
 }  // namespace base
 
+/*
 void StopBenchmarkTiming() {
   base::current_benchmark_->Stop();
 }
@@ -104,15 +112,20 @@ void StopBenchmarkTiming() {
 void StartBenchmarkTiming() {
   base::current_benchmark_->Start();
 }
+*/
 
 
 int main(int argc, char **argv) {
   testing::InitGoogleTest(&argc, argv);
+  if (FLAGS_bench) {
+    benchmark::Initialize(&argc, (const char**)argv);
+  }
   MainInitGuard guard(&argc, &argv);
   LOG(INFO) << "Starting tests in " << argv[0];
   int res = RUN_ALL_TESTS();
+
   if (FLAGS_bench) {
-    base::BenchmarkRun::RunAllBenchmarks();
+    benchmark::RunSpecifiedBenchmarks();
   }
   return res;
 }

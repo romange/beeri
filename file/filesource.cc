@@ -6,39 +6,51 @@
 
 #include "base/logging.h"
 #include "file/file.h"
+#include "strings/split.h"
+#include "strings/strip.h"
 #include "util/bzip_source.h"
 #include "util/zlib_source.h"
 
 namespace file {
 
 using strings::Slice;
-using util::Status;
+using strings::SkipWhitespace;
+using base::Status;
+using namespace std;
 
-Source::Source(File* file,  Ownership ownership, uint32 buffer_size)
+Source::Source(ReadonlyFile* file,  Ownership ownership, uint32 buffer_size)
  : BufferredSource(buffer_size), file_(file), ownership_(ownership) {
 }
 
 Source::~Source() {
   if (ownership_ == TAKE_OWNERSHIP)
-    CHECK(file_->Close());
+    CHECK(file_->Close().ok());
 }
 
 Status Source::SkipPos(uint64 offset) {
-  return file_->Seek(offset, SEEK_CUR);
+  offset_ += offset;
+  return Status::OK;
 }
 
 bool Source::RefillInternal() {
   uint32 refill = available_to_refill();
-  size_t size_read = 0;
-  status_ = file_->Read(refill, peek_pos_ + avail_peek_, &size_read);
-  avail_peek_ += size_read;
+  strings::Slice result;
+  status_ = file_->Read(offset_, refill, &result, peek_pos_ + avail_peek_);
   if (!status_.ok()) {
     return true;
   }
-  return false;
+  if (!result.empty()) {
+    if (result.ubuf() != peek_pos_ + avail_peek_) {
+      memcpy(peek_pos_ + avail_peek_, result.ubuf(), result.size());
+    }
+    avail_peek_ += result.size();
+    offset_ += result.size();
+  }
+
+  return result.size() < refill;
 }
 
-util::Source* Source::Uncompressed(File* file) {
+util::Source* Source::Uncompressed(ReadonlyFile* file) {
   Source* first = new Source(file, TAKE_OWNERSHIP);
   if (util::BzipSource::IsBzipSource(first))
     return new util::BzipSource(first, TAKE_OWNERSHIP);
@@ -48,13 +60,13 @@ util::Source* Source::Uncompressed(File* file) {
 }
 
 Sink::~Sink() {
- if (ownership_ == TAKE_OWNERSHIP)
-  CHECK(file_->Close());
+  if (ownership_ == TAKE_OWNERSHIP)
+    CHECK(file_->Close());
 }
 
-util::Status Sink::Append(strings::Slice slice) {
+base::Status Sink::Append(strings::Slice slice) {
   uint64 bytes_written = 0;
-  return file_->Write(slice.data(), slice.size(), &bytes_written);
+  return file_->Write(slice.ubuf(), slice.size(), &bytes_written);
 }
 
 Status Sink::Flush() {
@@ -62,9 +74,9 @@ Status Sink::Flush() {
 }
 
 LineReader::LineReader(const std::string& fl) : ownership_(TAKE_OWNERSHIP) {
-  File* f = file::Open(fl, "r");
-  CHECK(f) << fl;
-  source_ = new file::Source(f, TAKE_OWNERSHIP);
+  auto res = ReadonlyFile::Open(fl);
+  CHECK(res.ok()) << fl;
+  source_ = file::Source::Uncompressed(res.obj);
 }
 
 LineReader::~LineReader() {
@@ -94,6 +106,34 @@ bool LineReader::Next(std::string* result) {
     source_->Skip(s.size());
   }
   return !(eof && result->empty());
+}
+
+CsvReader::CsvReader(const std::string& filename,
+                     std::function<void(const std::vector<StringPiece>&)> row_cb)
+    : reader_(filename), row_cb_(row_cb) {
+}
+
+void CsvReader::SkipHeader(unsigned rows) {
+  string tmp;
+  for (unsigned i = 0; i < rows; ++i) {
+    if (!reader_.Next(&tmp))
+      return;
+  }
+}
+
+void CsvReader::Run() {
+  string line;
+  vector<char*> v;
+  vector<StringPiece> v2;
+  while (reader_.Next(&line)) {
+    StripWhiteSpace(&line);
+    if (line.empty())
+      continue;
+    v.clear();
+    SplitCSVLineWithDelimiter(&line.front(), ',',  &v);
+    v2.assign(v.begin(), v.end());
+    row_cb_(v2);
+  }
 }
 
 }  // namespace file

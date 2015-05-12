@@ -118,11 +118,8 @@
 #include <iosfwd>
 #include <limits>
 #include <string>
-using std::string;
 
 #include "base/integral_types.h"
-#include "base/port.h"
-#include "strings/fastmem.h"
 #include "strings/slice.h"
 
 class StringPiece : public strings::SliceBase<char> {
@@ -145,6 +142,9 @@ class StringPiece : public strings::SliceBase<char> {
   StringPiece(const char* offset, size_t len)
       : Base(offset, len) {}
 
+  StringPiece(const unsigned char* offset, size_t len)
+      : Base(reinterpret_cast<const char*>(offset), len) {}
+
   // Substring of another StringPiece.
   // pos must be non-negative and <= x.length().
   StringPiece(const StringPiece& x, size_t pos) : Base(x, pos) {}
@@ -153,7 +153,7 @@ class StringPiece : public strings::SliceBase<char> {
   // pos must be non-negative and <= x.length().
   // len must be non-negative and will be pinned to at most x.length() - pos.
   StringPiece(const StringPiece& x, size_t pos, size_t len) : Base(x, pos, len) {}
-  StringPiece(strings::Slice s) : Base(s.charptr(), s.size()) {}
+  // StringPiece(strings::Slice s) : Base(s.charptr(), s.size()) {}
 
   using Base::set;
 
@@ -165,13 +165,17 @@ class StringPiece : public strings::SliceBase<char> {
       length_ = 0;
   }
 
-  string as_string() const {
+  std::string as_string() const {
     return ToString();
   }
 
-  strings::Slice as_slice() const {
-    return strings::Slice(reinterpret_cast<const uint8*>(ptr_), length_);
+  StringPiece as_slice() const {
+    //return strings::Slice(reinterpret_cast<const uint8*>(ptr_), length_);
+    return *this;
   }
+
+  const unsigned char* ubuf() const { return reinterpret_cast<const uint8*>(ptr_); }
+  const unsigned char* uend() const { return reinterpret_cast<const uint8*>(ptr_) + length_; }
 
   bool starts_with(StringPiece x) const {
     return (length_ >= x.length_) && (memcmp(ptr_, x.ptr_, x.length_) == 0);
@@ -186,13 +190,13 @@ class StringPiece : public strings::SliceBase<char> {
   // "ToString", and it's confusing to have the method that does that
   // for a StringPiece be called "as_string()".  We also leave the
   // "as_string()" method defined here for existing code.
-  string ToString() const {
-    if (ptr_ == nullptr) return string();
-    return string(data(), size());
+  std::string ToString() const {
+    if (ptr_ == nullptr) return std::string();
+    return std::string(data(), size());
   }
 
-  void CopyToString(string* target) const;
-  void AppendToString(string* target) const;
+  void CopyToString(std::string* target) const;
+  void AppendToString(std::string* target) const;
 
   // cpplint.py emits a false positive [build/include_what_you_use]
   size_type copy(char* buf, size_type n, size_type pos = 0) const;  // NOLINT
@@ -223,8 +227,8 @@ inline bool operator==(StringPiece x, StringPiece y) {
     return false;
   }
 
-  return x.data() == y.data() || len <= 0 ||
-      strings::memeq(x.data(), y.data(), len);
+  return x.data() == y.data() || len == 0 ||
+      memcmp(x.data(), y.data(), len) == 0;
 }
 
 inline bool operator!=(StringPiece x, StringPiece y) {
@@ -253,5 +257,8 @@ inline bool operator>=(StringPiece x, StringPiece y) {
 // allow StringPiece to be logged
 extern std::ostream& operator<<(std::ostream& o, StringPiece piece);
 
+namespace strings {
+  typedef ::StringPiece Slice;
+}  // namespace strings
 
 #endif  // STRINGS_STRINGPIECE_H__

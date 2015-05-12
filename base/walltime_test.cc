@@ -1,12 +1,17 @@
-// Copyright 2014, Beeri 15.  All rights reserved.
-// Author: Roman Gershman (romange@gmail.com)
+// Copyright 2013, Beeri 15.  All rights reserved.
+// Author: Roman Gershman (romange@romange.com)
 //
-#include "base/gtest.h"
-#include "base/logging.h"
 #include "base/walltime.h"
-#include "base/mutex.h"
+
 #include <mutex>
 #include <time.h>
+#include <functional>
+#include <benchmark/benchmark.h>
+
+#include "base/gtest.h"
+#include "base/logging.h"
+// #include "base/mutex.h"
+
 
 namespace base {
 
@@ -58,35 +63,90 @@ TEST_F(WalltimeTest, Lambda) {
   EXPECT_TRUE(GccCopyPolicy<FuncCb>::value);
 }
 
-DECLARE_BENCHMARK_FUNC(BM_GetCurrentTimeMicros, iters) {
+TEST_F(WalltimeTest, Tmzone) {
+  int est_diff = base::TimezoneDiff("EST");
+  EXPECT_EQ(-5, est_diff);
+  int ny_diff = base::TimezoneDiff("America/New_York");
+  EXPECT_LT(ny_diff, 0);
+  EXPECT_LE(est_diff, ny_diff);
+}
+
+TEST_F(WalltimeTest, ClockRes) {
+  timespec ts;
+  ASSERT_EQ(0, clock_getres(CLOCK_REALTIME_COARSE, &ts));
+  ASSERT_EQ(0, ts.tv_sec);
+  EXPECT_LE(ts.tv_nsec, 4000000);
+
+  ASSERT_EQ(0, clock_getres(CLOCK_MONOTONIC_COARSE, &ts));
+  ASSERT_EQ(0, ts.tv_sec);
+  EXPECT_LE(ts.tv_nsec, 4000000);
+
+  ASSERT_EQ(0, clock_getres(CLOCK_PROCESS_CPUTIME_ID, &ts));
+  EXPECT_LE(ts.tv_nsec, 4000000);
+
+  ASSERT_EQ(0, clock_getres(CLOCK_MONOTONIC, &ts));
+  EXPECT_LE(ts.tv_nsec, 1000000);
+}
+
+static void BM_GetCurrentTimeMicros(benchmark::State& state) {
   LOG(INFO) << "Cycle frequency: " << CycleClock::CycleFreq();
-  for (int i = 0; i < iters; ++i) {
+  while (state.KeepRunning()) {
     sink_result(GetCurrentTimeMicros());
   }
 }
+BENCHMARK(BM_GetCurrentTimeMicros);
 
 DECLARE_BENCHMARK_FUNC(BM_Time, iters) {
-  for (int i = 0; i < iters; ++i) {
+  while (state.KeepRunning()) {
+    sink_result(time(NULL));
     sink_result(time(NULL));
   }
 }
 
 DECLARE_BENCHMARK_FUNC(BM_GetTimeOfDay, iters) {
   struct timeval tv;
-  for (int i = 0; i < iters; ++i) {
+  while (state.KeepRunning()) {
     sink_result(gettimeofday(&tv, NULL));
   }
 }
 
-DECLARE_BENCHMARK_FUNC(BM_ClockCoarse, iters) {
+DECLARE_BENCHMARK_FUNC(BM_ClockRealtimeCoarse, iters) {
   timespec ts;
-  for (size_t i = 0; i < iters; ++i) {
+  while (state.KeepRunning()) {
     sink_result(clock_gettime(CLOCK_REALTIME_COARSE, &ts));
   }
 }
 
+DECLARE_BENCHMARK_FUNC(BM_ClockMonotonic, iters) {
+  timespec ts;
+  while (state.KeepRunning()) {
+    sink_result(clock_gettime(CLOCK_MONOTONIC, &ts));
+  }
+}
+
+DECLARE_BENCHMARK_FUNC(BM_ClockMonotonicCoarse, iters) {
+  timespec ts;
+  while (state.KeepRunning()) {
+    sink_result(clock_gettime(CLOCK_MONOTONIC_COARSE, &ts));
+  }
+}
+
+DECLARE_BENCHMARK_FUNC(BM_ClockRealtime, iters) {
+  timespec ts;
+  while (state.KeepRunning()) {
+    sink_result(clock_gettime(CLOCK_REALTIME, &ts));
+  }
+}
+
+DECLARE_BENCHMARK_FUNC(BM_ClockProcessCPUID, iters) {
+  timespec ts;
+  while (state.KeepRunning()) {
+    sink_result(clock_gettime(CLOCK_PROCESS_CPUTIME_ID, &ts));
+  }
+}
+
 DECLARE_BENCHMARK_FUNC(BM_CycleClock, iters) {
-  for (size_t i = 0; i < iters; ++i) {
+  while (state.KeepRunning()) {
     sink_result(CycleClock::Now());
   }
 }
@@ -95,7 +155,7 @@ DECLARE_BENCHMARK_FUNC(BM_ReadLock, iters) {
   pthread_rwlock_t lock;
   CHECK_EQ(0, pthread_rwlock_init(&lock, nullptr));
   CHECK_EQ(0, pthread_rwlock_rdlock(&lock));
-  for (size_t i = 0; i < iters; ++i) {
+  while (state.KeepRunning()) {
     CHECK_EQ(0, pthread_rwlock_rdlock(&lock));
     CHECK_EQ(0, pthread_rwlock_unlock(&lock));
   }
@@ -106,24 +166,16 @@ DECLARE_BENCHMARK_FUNC(BM_ReadLock, iters) {
 DECLARE_BENCHMARK_FUNC(BM_WriteLock, iters) {
   pthread_rwlock_t lock;
   CHECK_EQ(0, pthread_rwlock_init(&lock, nullptr));
-  for (size_t i = 0; i < iters; ++i) {
+  while (state.KeepRunning()) {
     CHECK_EQ(0, pthread_rwlock_wrlock(&lock));
     CHECK_EQ(0, pthread_rwlock_unlock(&lock));
   }
   pthread_rwlock_destroy(&lock);
 }
 
-DECLARE_BENCHMARK_FUNC(BM_MutexLock, iters) {
-  Mutex m;
-  for (size_t i = 0; i < iters; ++i) {
-    m.Lock();
-    m.Unlock();
-  }
-}
-
 DECLARE_BENCHMARK_FUNC(BM_StlMutexLock, iters) {
   std::mutex m;
-  for (size_t i = 0; i < iters; ++i) {
+  while (state.KeepRunning()) {
     m.lock();
     m.unlock();
   }
