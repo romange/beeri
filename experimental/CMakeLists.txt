@@ -15,3 +15,6 @@ cxx_link(xml_parser http_client)
 
 add_executable(read_sstable read_sstable.cc)
 cxx_link(read_sstable base sstable)
+
+add_executable(interview interview.cc)
+cxx_link(interview base json mysqlcppconn)
